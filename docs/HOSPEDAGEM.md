@@ -1,66 +1,83 @@
 # Hospedagem da Zeik Store
 
-Este guia descreve a configuração a fazer **depois que o agente implementar a loja** seguindo [PROMPT_AGENTE.md](../PROMPT_AGENTE.md).
+Guia para conectar o Supabase e publicar a loja. O código já está implementado neste repositório (React + TypeScript + Vite), com `supabase/schema.sql`, `supabase/seed.sql`, `supabase/admin.sql`, scripts de validação e o rewrite de SPA em `vercel.json`.
 
-## Estado inicial
+**Ainda falta (esta é a sua parte):** criar o projeto Supabase de testes, executar os SQLs, preencher as variáveis, promover sua conta a administradora e publicar na Vercel. Nada disso altera outros projetos: use um projeto Supabase **exclusivo** para a Zeik Store.
 
-O repositório começa com documentação e variáveis de exemplo. Ainda não contém uma aplicação executável, banco provisionado, usuário administrador ou deploy. Os arquivos SQL e os scripts npm abaixo devem ser gerados pelo agente.
+## 1. Pré-requisitos e instalação local
 
-## 1. Gerar o projeto pelo agente
+1. Node.js **20.19 ou mais novo** (o Vite atual exige isso; confira com `node -v`).
+2. Na raiz do repositório (onde está o `package.json`), instale as versões exatas do lockfile:
 
-1. Abra o repositório `ermprodutmaneger/Zeik-Store-` no agente de programação.
-2. Envie o conteúdo de `PROMPT_AGENTE.md`.
-3. Confira se o resultado inclui o aplicativo, `package.json`, lockfile, scripts de validação, SQL do banco e configuração de rotas para a Vercel.
-4. Salve o código neste mesmo repositório.
+   ```bash
+   npm ci
+   ```
+
+3. Sem as variáveis do Supabase (próxima seção), `npm run dev` abre a loja mostrando apenas a **tela de configuração pendente** — é o comportamento esperado: nada é simulado.
 
 ## 2. Conectar um projeto exclusivo no Supabase
 
-1. Abra [Supabase](https://supabase.com/dashboard) e selecione ou crie um projeto dedicado a este teste, conforme o plano disponível. Não reutilize o banco de clientes.
-2. No painel Connect, obtenha a URL do projeto e sua chave publicável.
-3. Copie `.env.example` para `.env.local` no ambiente de desenvolvimento e preencha:
+1. Abra [Supabase](https://supabase.com/dashboard) e crie (ou selecione) um projeto dedicado a este teste, conforme o plano disponível. Não reutilize banco de clientes.
+2. No painel **Connect**, obtenha a URL do projeto e a chave publicável (`sb_publishable_…`).
+3. Copie `.env.example` para `.env.local` e preencha:
    - `VITE_SUPABASE_URL`: URL do projeto.
    - `VITE_SUPABASE_PUBLISHABLE_KEY`: chave publicável.
-4. Não use chaves secretas ou `service_role` no frontend. Arquivos `.env.local` não devem ser enviados ao GitHub.
-5. Após o agente criar o `package.json` e o lockfile, execute `npm ci` e `npm run dev`. Ao alterar variáveis locais, reinicie o servidor.
+4. Nunca use `service_role`, `sb_secret` ou senha do banco no frontend. O `.env.local` já está fora do Git (`.gitignore`).
+5. Reinicie o servidor após mudar variáveis: `npm run dev`. A loja deve passar da tela de configuração para a vitrine.
 
 ## 3. Preparar banco, imagens e administrador
 
-1. Revise o SQL gerado. No projeto de teste correto, execute `supabase/schema.sql` e depois `supabase/seed.sql`, conforme o README atualizado.
-2. Confirme que as tabelas expostas têm RLS e que os privilégios de `anon` e `authenticated` são os mínimos necessários.
-3. Crie o bucket do catálogo e as políticas de upload, leitura e exclusão descritas pelo agente. Um bucket público deve conter somente fotos públicas de produtos.
-4. Cadastre a sua conta pelo aplicativo e confirme o e-mail.
-5. Localize o UUID dessa conta em Authentication e execute somente para esse UUID o procedimento de atribuição de administrador. Não existe senha administrativa padrão.
+No **SQL Editor** do projeto de teste correto, execute nesta ordem:
 
-## 4. Configurar autenticação
+1. [`supabase/schema.sql`](../supabase/schema.sql) — cria tabelas (`profiles`, `user_roles`, `categories`, `products`, `orders`, `order_items`), índices, constraints, funções (`is_admin`, `create_test_order`), triggers, RLS com privilégios mínimos e o bucket público **`product-images`** (JPEG/PNG/WebP, até 5 MB; leitura pública, escrita/exclusão só de administradores).
+2. [`supabase/seed.sql`](../supabase/seed.sql) — 4 categorias e 8 produtos fictícios de demonstração (um deles com estoque zero e outro com estoque baixo, de propósito). As fotos do seed ficam em `public/demo/` no site; fotos enviadas depois pelo painel vão para o Storage.
+3. Cadastre a sua conta pelo aplicativo (`/cadastro`) e confirme o e-mail.
+4. Em **Authentication → Users**, copie o UUID da sua conta e promova-a executando [`supabase/admin.sql`](../supabase/admin.sql) com o seu UUID. Não existe senha administrativa padrão, e ninguém consegue se promover pela API.
+5. Saia e entre de novo no app: o menu **Painel** aparece e `/admin` libera.
 
-1. Habilite o provedor de e-mail e senha e confira as regras de confirmação.
-2. Em Authentication → URL Configuration, configure a Site URL e as URLs permitidas de retorno.
-3. Durante o desenvolvimento, use o endereço local realmente mostrado pelo Vite. Se for `http://localhost:5173`, autorize os caminhos de callback e recuperação implementados pelo agente nesse endereço.
-4. Após a publicação, use a URL real de produção na Site URL e autorize os caminhos exatos de callback e recuperação desse domínio. Não invente uma URL antes do deploy.
-5. Verifique a configuração de envio de e-mails do projeto. Se o envio padrão não atender aos destinatários do teste, configure um SMTP apropriado antes de testar confirmação e recuperação; não considere o fluxo validado sem receber os e-mails.
+> Dica: em **Table Editor**, confira o ícone de RLS ativo nas seis tabelas; em **Storage**, o bucket `product-images` deve estar público e conter apenas fotos do catálogo.
+
+## 4. Configurar autenticação (URLs de retorno)
+
+1. Em **Authentication → Providers**, confirme o provedor **Email** ativo e a confirmação de e-mail ligada.
+2. Em **Authentication → URL Configuration**, cadastre os endereços que o app usa:
+   - A página `/auth/callback` recebe o link de confirmação de cadastro.
+   - A página `/redefinir-senha` recebe o link de recuperação de senha.
+3. **Desenvolvimento** (endereço mostrado pelo Vite, em geral `http://localhost:5173`):
+   - Site URL: `http://localhost:5173`
+   - Redirect URLs:
+     - `http://localhost:5173/auth/callback`
+     - `http://localhost:5173/redefinir-senha`
+4. **Produção**: depois do primeiro deploy, troque pela URL real que a Vercel der (não invente antes):
+   - Site URL: `https://SUA-LOJA.vercel.app`
+   - Redirect URLs (adicione sem apagar as de desenvolvimento, se ainda testar local):
+     - `https://SUA-LOJA.vercel.app/auth/callback`
+     - `https://SUA-LOJA.vercel.app/redefinir-senha`
+5. Confira o envio de e-mails do projeto. O remetente padrão do Supabase tem limites; se os e-mails de teste não chegarem, configure um SMTP próprio em **Project Settings → Authentication** antes de considerar confirmação/recuperação validadas.
 
 ## 5. Publicar na Vercel pelo GitHub
 
-1. Verifique os resultados de tipos, lint e `npm run build`.
+1. Verifique localmente: `npm run typecheck`, `npm run lint` e `npm run build` devem passar.
 2. Na [Vercel](https://vercel.com/new), importe o repositório `ermprodutmaneger/Zeik-Store-`.
-3. Selecione o projeto React/Vite gerado. Use como raiz a pasta que contém o `package.json`.
-4. Confira o comando de build `npm run build` e a saída `dist`, salvo configuração diferente documentada pelo agente.
-5. Adicione `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` ao ambiente pretendido. Como Vite incorpora essas variáveis no build, alterações exigem um novo deploy.
-6. Publique e copie a URL que a Vercel retornar.
-7. Atualize a configuração de autenticação do Supabase com essa URL, como descrito acima.
-8. Abra diretamente uma rota interna e recarregue. O aplicativo deve ter o rewrite de SPA configurado para evitar erros 404.
-9. Os próximos pushes na branch de produção devem gerar novos deploys quando a integração Git estiver ativa.
+3. A Vercel detecta Vite automaticamente. Confira: raiz = pasta do `package.json` (a raiz do repo), build `npm run build`, saída `dist`.
+4. Em **Environment Variables**, adicione `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` ao ambiente de produção. O Vite embute essas variáveis no build: qualquer alteração pede um novo deploy.
+5. Publique e copie a URL final. Volte à seção 4 e cadastre essa URL no Supabase (Site URL + as duas Redirect URLs).
+6. Teste abrir diretamente uma rota interna (ex.: `/carrinho`, `/admin`) e recarregar: o rewrite de SPA em `vercel.json` evita o 404.
+7. Com a integração Git ativa, novos pushes na branch de produção geram novos deploys automaticamente.
+
+> Previews de Pull Request: cada preview ganha uma URL própria. Para testar login/confirmação nelas, adicione temporariamente `https://URL-DO-PREVIEW/auth/callback` e `.../redefinir-senha` às Redirect URLs, ou teste a autenticação apenas em produção/localhost.
 
 ## 6. Conferir o teste completo
 
-- Visitante: vê produtos ativos, mas não entra em páginas privadas.
-- Cliente A: entra, edita o próprio nome e cria pedido de teste.
-- Cliente B: não consulta nem altera dados do Cliente A, inclusive por chamadas diretas à API.
-- Administrador: cadastra produto com foto, altera preço e estoque e acompanha pedidos.
-- Recarregamento: produtos e pedidos continuam no banco.
-- Estoque: pedido concorrente ou repetido não causa estoque negativo ou pedido duplicado.
-- E-mail: confirmação e recuperação abrem as rotas corretas do site publicado.
-- Pagamento: nenhum valor é cobrado nesta fase.
+- **Configuração pendente:** sem as variáveis (ex.: apague-as de um preview), aparece a tela de configuração — sem login ou pedidos simulados.
+- **Visitante:** vê apenas produtos ativos; `/conta` e `/admin` pedem login.
+- **Cliente A:** cadastra, confirma o e-mail, entra, edita o próprio nome e finaliza um pedido de teste.
+- **Cliente B:** não vê nem altera nada do Cliente A — inclusive chamando a API direto (RLS). Tentar gravar em `user_roles`, mudar preço/estoque ou ler pedidos alheios deve falhar.
+- **Administrador:** cadastra produto com foto (Storage), muda preço/estoque, desativa produto que já tem pedidos (excluir é bloqueado para preservar o histórico) e atualiza o andamento dos pedidos.
+- **Estoque:** o pedido baixa as unidades; dois envios com a mesma finalização (duplo clique/retry) não duplicam o pedido; quantidade maior que o estoque é recusada com mensagem clara.
+- **Persistência:** recarregar a página mantém produtos, fotos e pedidos vindos do banco.
+- **E-mails:** confirmação cai em `/auth/callback`; recuperação, em `/redefinir-senha` — no domínio certo (localhost ou produção).
+- **Pagamento:** nenhum valor é cobrado nesta fase; pedidos nascem como “de teste”.
 
 ## Referências oficiais
 

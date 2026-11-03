@@ -1,0 +1,253 @@
+/* Zeik Store — painel do administrador */
+
+.admin-shell {
+  display: grid;
+  gap: 22px;
+  align-items: start;
+}
+
+@media (min-width: 980px) {
+  .admin-shell {
+    grid-template-columns: 250px 1fr;
+  }
+}
+
+.admin-nav {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 12px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+@media (min-width: 980px) {
+  .admin-nav {
+    flex-direction: column;
+    position: sticky;
+    top: 88px;
+    overflow: visible;
+  }
+}
+
+.admin-nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.93rem;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.admin-nav a:hover {
+  background: var(--surface-soft);
+  text-decoration: none;
+}
+
+.admin-nav a.active {
+  background: var(--grad);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.28);
+}
+
+.admin-nav .nav-divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 8px 4px;
+  display: none;
+}
+
+@media (min-width: 980px) {
+  .admin-nav .nav-divider {
+    display: block;
+  }
+}
+
+/* ---------- Estatísticas ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (min-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
+}
+
+.stat-card .stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--violet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.stat-card .stat-value {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.stat-card .stat-label {
+  color: var(--ink-muted);
+  font-size: 0.86rem;
+  margin-top: 2px;
+}
+
+/* ---------- Tabelas administrativas ---------- */
+.table-wrap {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  min-width: 680px;
+}
+
+.data-table th {
+  text-align: left;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfafe;
+}
+
+.data-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.table-product {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.table-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #efeaff, #e2f6fb);
+}
+
+.table-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* ---------- Formulário de produto ---------- */
+.product-form-grid {
+  display: grid;
+  gap: 22px;
+  align-items: start;
+}
+
+@media (min-width: 920px) {
+  .product-form-grid {
+    grid-template-columns: 1fr 340px;
+  }
+}
+
+.form-2col {
+  display: grid;
+  gap: 0 16px;
+}
+
+@media (min-width: 640px) {
+  .form-2col {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.image-drop {
+  border: 1.5px dashed #c9c2ea;
+  border-radius: var(--radius-lg);
+  background: #fbfafe;
+  padding: 18px;
+  text-align: center;
+}
+
+.image-drop .preview {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, #efeaff, #e2f6fb);
+  margin-bottom: 14px;
+}
+
+.image-drop .preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px dashed var(--line);
+  margin-top: 6px;
+}
+
+/* ---------- Diálogo de confirmação simples ---------- */
+.confirm-box {
+  background: var(--warning-bg);
+  border: 1px solid #f2ddb8;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
