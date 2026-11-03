@@ -27,7 +27,7 @@ export function RegisterPage() {
 
   function validate(): boolean {
     const errors: Record<string, string> = {}
-    if (fullName.trim().length < 2) errors.fullName = 'Informe seu nome (mínimo 2 letras).'
+    if (fullName.trim().length < 2 || fullName.trim().length > 120) errors.fullName = 'Informe seu nome, entre 2 e 120 caracteres.'
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.email = 'Informe um e-mail válido.'
     if (password.length < 6) errors.password = 'A senha deve ter pelo menos 6 caracteres.'
     if (confirmPassword !== password) errors.confirmPassword = 'As senhas não coincidem.'
@@ -141,6 +141,7 @@ export function RegisterPage() {
               className="input"
               type="text"
               autoComplete="name"
+              maxLength={120}
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -159,6 +160,7 @@ export function RegisterPage() {
               className="input"
               type="email"
               autoComplete="email"
+              maxLength={254}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}

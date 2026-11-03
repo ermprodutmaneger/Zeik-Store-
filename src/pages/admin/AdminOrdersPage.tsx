@@ -68,11 +68,11 @@ export function AdminOrdersPage() {
       setSavedMessage(
         `Pedido #${shortId(order.id)} atualizado para “${ORDER_STATUS_LABELS[next]}”.`,
       )
-    } catch {
+    } catch (err) {
       setOrders((current) =>
         current.map((o) => (o.id === order.id ? { ...o, status: previous } : o)),
       )
-      setError(`Não foi possível atualizar o pedido #${shortId(order.id)}.`)
+      setError(err instanceof Error ? err.message : `Não foi possível atualizar o pedido #${shortId(order.id)}.`)
     } finally {
       setUpdatingId(null)
     }
@@ -184,7 +184,7 @@ export function AdminOrdersPage() {
                 className="select"
                 style={{ width: 'auto', minWidth: 200 }}
                 value={order.status}
-                disabled={updatingId === order.id}
+                disabled={updatingId === order.id || order.status === 'cancelado' || order.status === 'entregue'}
                 onChange={(e) =>
                   void handleStatusChange(order, e.target.value as OrderStatus)
                 }

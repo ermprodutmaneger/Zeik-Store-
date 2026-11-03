@@ -2,9 +2,9 @@
 
 Loja de testes completa para aprender **Supabase na prática**: autenticação real, banco PostgreSQL com Row Level Security (RLS), upload de fotos no Storage e painel de administrador — com pedidos de teste **sem cobrança**.
 
-**Estado atual:** código implementado, verificado (tipos, lint e build) e pronto para conectar a um projeto Supabase de testes e publicar na Vercel. A conexão com o banco e o deploy são os próximos passos: siga [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md).
+**Estado atual:** código verificado com lint e build; banco e Storage configurados no projeto exclusivo `zeik-store`, na região de São Paulo. O projeto Vercel `zeik-store` está vinculado a este repositório com as variáveis públicas configuradas. O primeiro acesso pessoal e os fluxos de e-mail devem seguir as instruções de [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md).
 
-## O que funciona
+## Recursos implementados
 
 - **Vitrine** responsiva (celular, iPad e desktop): banner, categorias, busca, ordenação, página do produto e produtos relacionados, sempre lendo do banco.
 - **Carrinho** persistido no navegador, com revalidação de preço/estoque contra o banco ao abrir e ao finalizar.
@@ -18,6 +18,8 @@ Loja de testes completa para aprender **Supabase na prática**: autenticação r
 ## Tecnologias
 
 React 19, TypeScript, Vite, React Router e `@supabase/supabase-js`, com versões exatas no `package.json` e `package-lock.json`.
+
+Requer Node.js 24.x.
 
 ## Início rápido
 
@@ -81,10 +83,22 @@ Rotas principais: `/` (vitrine), `/produto/:slug`, `/carrinho`, `/entrar`, `/cad
 - RLS em todas as tabelas + privilégios mínimos por coluna (`profiles.full_name` é o único campo editável pelo cliente; `orders.status` é a única coluna atualizável, e só por administradores via RLS).
 - `user_roles` sem nenhuma política de escrita: promoção a admin só via SQL Editor ([`supabase/admin.sql`](supabase/admin.sql)).
 - O navegador envia apenas IDs e quantidades ao finalizar; total, preço e estoque são decididos no banco.
+- Cancelar um pedido devolve o estoque uma única vez; pedidos cancelados ou entregues são encerrados.
+- Funções privilegiadas ficam no schema privado, com permissões explícitas e `search_path` fixo. Os perfis são criados pelo trigger do Auth, sem inserção direta pelo cliente.
 - Bucket público apenas com fotos do catálogo; upload/substituição/exclusão restritos a administradores por políticas do Storage.
 
-## Pendências (próxima etapa)
+## Verificações realizadas
 
-- Criar o projeto Supabase de testes, executar os SQLs e ligar as variáveis (ainda não há banco conectado — por isso os fluxos com e-mail, pedidos e upload ainda não foram testados de ponta a ponta).
-- Publicar na Vercel e cadastrar as URLs de produção no Supabase Auth.
-- Pagamento real está fora desta fase: nenhum pedido é cobrado ou marcado como pago.
+- Instalação pelo lockfile, lint, tipos e build de produção.
+- API real: oito produtos públicos; perfis e criação de pedido bloqueados sem login.
+- [scripts/verify-database.sql](scripts/verify-database.sql): visitante, dois clientes e administrador, isolamento de dados, preço calculado no banco, estoque, idempotência, cancelamento e políticas de Storage. Usa uma transação com rollback; não deixa usuários nem pedidos de teste.
+- Supabase Security Advisor: nenhuma ocorrência após a configuração.
+
+## Primeiro acesso
+
+1. Configure os links de confirmação e recuperação para a URL real do deploy, conforme o guia.
+2. Crie sua conta pela loja e confirme o e-mail.
+3. Promova somente o UUID dessa conta usando o procedimento administrativo. Não existe conta nem senha administrativa padrão.
+4. Valide confirmação/recuperação por e-mail e upload de fotos com sua conta. Os testes SQL não substituem a entrega real de e-mail ou o upload completo pelo navegador.
+
+Nenhum pedido desta fase é cobrado ou marcado como pago.

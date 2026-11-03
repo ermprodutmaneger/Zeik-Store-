@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import { ensureProfile, getMyRole, getProfile } from '../services/profile'
+import { getMyRole, getProfile } from '../services/profile'
 import type { Profile, UserRole } from '../types/database'
 import { AuthContext, type AuthContextValue } from './authContext'
 
@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const [loadedProfile, loadedRole] = await Promise.all([
-        ensureProfile(currentUser),
+        getProfile(currentUser.id),
         getMyRole(currentUser.id),
       ])
       if (requestRef.current !== requestId) return

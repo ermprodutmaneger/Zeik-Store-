@@ -19,7 +19,7 @@ function readLinkError(): string | null {
     return 'Este link de recuperação expirou ou já foi usado. Solicite um novo.'
   }
   return description
-    ? `Não foi possível validar o link (${decodeURIComponent(description.replace(/\+/g, ' '))}). Solicite um novo.`
+    ? `Não foi possível validar o link (${description}). Solicite um novo.`
     : 'Não foi possível validar o link. Solicite um novo.'
 }
 

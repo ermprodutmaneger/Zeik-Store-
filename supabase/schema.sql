@@ -16,7 +16,7 @@
 --     e consultam apenas os próprios pedidos.
 --   - Administradores são definidos SOMENTE na tabela user_roles. Nenhum
 --     cliente consegue escrever nela pela API (sem políticas de escrita);
---     quem decide é o banco via public.is_admin(), não o navegador.
+--     quem decide é o banco via private.is_admin(), não o navegador.
 --   - Pedidos de teste nascem na função create_test_order (SECURITY DEFINER):
 --     valida usuário, produtos ativos, preços e estoque no servidor, grava
 --     itens com nome/preço do momento e baixa o estoque em uma transação,
@@ -25,6 +25,13 @@
 -- =============================================================================
 
 create extension if not exists pgcrypto;
+
+-- Funções privilegiadas ficam fora dos schemas expostos pela Data API.
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+alter default privileges in schema private revoke execute on functions from public;
+grant usage on schema public to anon, authenticated;
 
 -- -----------------------------------------------------------------------------
 -- Tabelas
@@ -123,9 +130,10 @@ create index if not exists order_items_product_id_idx on public.order_items (pro
 -- -----------------------------------------------------------------------------
 
 -- Mantém updated_at sincronizado em qualquer UPDATE.
-create or replace function public.set_updated_at()
+create or replace function private.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new.updated_at := now();
@@ -136,31 +144,31 @@ $$;
 drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at
   before update on public.profiles
-  for each row execute function public.set_updated_at();
+  for each row execute function private.set_updated_at();
 
 drop trigger if exists user_roles_set_updated_at on public.user_roles;
 create trigger user_roles_set_updated_at
   before update on public.user_roles
-  for each row execute function public.set_updated_at();
+  for each row execute function private.set_updated_at();
 
 drop trigger if exists products_set_updated_at on public.products;
 create trigger products_set_updated_at
   before update on public.products
-  for each row execute function public.set_updated_at();
+  for each row execute function private.set_updated_at();
 
 drop trigger if exists orders_set_updated_at on public.orders;
 create trigger orders_set_updated_at
   before update on public.orders
-  for each row execute function public.set_updated_at();
+  for each row execute function private.set_updated_at();
 
 -- Verdadeiro se o usuário da sessão é administrador.
 -- SECURITY DEFINER: lê user_roles sem recursão de RLS e sem expor a tabela.
-create or replace function public.is_admin()
+create or replace function private.is_admin()
 returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1
@@ -173,17 +181,17 @@ $$;
 -- Ao cadastrar: cria perfil e papel 'customer'.
 -- O nome inicial pode vir de raw_user_meta_data (apenas exibição); o papel é
 -- SEMPRE 'customer' aqui — metadata nunca concede administração.
-create or replace function public.handle_new_user()
+create or replace function private.handle_new_user()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   insert into public.profiles (id, full_name, email)
   values (
     new.id,
-    coalesce(btrim(new.raw_user_meta_data ->> 'full_name'), ''),
+    left(coalesce(btrim(new.raw_user_meta_data ->> 'full_name'), ''), 120),
     coalesce(new.email, '')
   )
   on conflict (id) do nothing;
@@ -199,7 +207,7 @@ $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute function public.handle_new_user();
+  for each row execute function private.handle_new_user();
 
 -- -----------------------------------------------------------------------------
 -- Criação de pedido de teste (transação única, validada no banco)
@@ -207,14 +215,14 @@ create trigger on_auth_user_created
 -- O navegador envia apenas [{product_id, quantity}] e uma chave de
 -- idempotência. Preços e total são calculados AQUI, com trava de linha nos
 -- produtos (FOR UPDATE) para pedidos concorrentes não furarem o estoque.
-create or replace function public.create_test_order(
+create or replace function private.create_test_order(
   p_items jsonb,
   p_idempotency_key uuid
 )
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user_id uuid := auth.uid();
@@ -329,8 +337,57 @@ begin
 end;
 $$;
 
+-- A API expõe somente o wrapper invoker; o código privilegiado é privado.
+create or replace function public.create_test_order(p_items jsonb, p_idempotency_key uuid)
+returns uuid
+language sql
+security invoker
+set search_path = ''
+as $$
+  select private.create_test_order(p_items, p_idempotency_key);
+$$;
+
 comment on function public.create_test_order(jsonb, uuid) is
   'Cria pedido de teste validando preço/estoque no banco, com baixa de estoque e idempotência. Retorna o ID do pedido.';
+
+-- Cancelamento é terminal e devolve o estoque uma única vez na transação.
+create or replace function private.handle_order_cancellation()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_item record;
+begin
+  if old.status = new.status then
+    return new;
+  end if;
+  if old.status in ('cancelado', 'entregue') then
+    raise exception 'Este pedido já foi encerrado e não pode mudar de andamento.';
+  end if;
+  if new.status = 'cancelado' then
+    for v_item in
+      select product_id, sum(quantity)::integer as quantity
+        from public.order_items
+       where order_id = old.id
+       group by product_id
+       order by product_id
+    loop
+      update public.products
+         set stock = stock + v_item.quantity
+       where id = v_item.product_id;
+    end loop;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function private.handle_order_cancellation() from public, anon, authenticated;
+drop trigger if exists orders_restore_stock_on_cancel on public.orders;
+create trigger orders_restore_stock_on_cancel
+  before update of status on public.orders
+  for each row execute function private.handle_order_cancellation();
 
 -- -----------------------------------------------------------------------------
 -- Row Level Security
@@ -353,142 +410,105 @@ drop policy if exists "Categorias: admin cria" on public.categories;
 create policy "Categorias: admin cria"
   on public.categories for insert
   to authenticated
-  with check (public.is_admin());
+  with check ((select private.is_admin()));
 
 drop policy if exists "Categorias: admin atualiza" on public.categories;
 create policy "Categorias: admin atualiza"
   on public.categories for update
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
 
 drop policy if exists "Categorias: admin exclui" on public.categories;
 create policy "Categorias: admin exclui"
   on public.categories for delete
   to authenticated
-  using (public.is_admin());
+  using ((select private.is_admin()));
 
 -- products: visitantes veem apenas ativos; administradores veem e gerenciam tudo.
 drop policy if exists "Produtos: vitrine lê ativos" on public.products;
-create policy "Produtos: vitrine lê ativos"
-  on public.products for select
-  to anon, authenticated
-  using (is_active = true);
-
 drop policy if exists "Produtos: admin lê todos" on public.products;
-create policy "Produtos: admin lê todos"
-  on public.products for select
+drop policy if exists "Produtos: leitura autorizada" on public.products;
+drop policy if exists "Produtos: visitante lê ativos" on public.products;
+create policy "Produtos: visitante lê ativos" on public.products for select to anon using (is_active = true);
+create policy "Produtos: leitura autorizada" on public.products for select
   to authenticated
-  using (public.is_admin());
+  using (is_active = true or (select private.is_admin()));
 
 drop policy if exists "Produtos: admin cria" on public.products;
 create policy "Produtos: admin cria"
   on public.products for insert
   to authenticated
-  with check (public.is_admin());
+  with check ((select private.is_admin()));
 
 drop policy if exists "Produtos: admin atualiza" on public.products;
 create policy "Produtos: admin atualiza"
   on public.products for update
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
 
 drop policy if exists "Produtos: admin exclui" on public.products;
 create policy "Produtos: admin exclui"
   on public.products for delete
   to authenticated
-  using (public.is_admin());
+  using ((select private.is_admin()));
 
 -- profiles: cada cliente lê/edita o próprio; admin lê todos (lista de pedidos).
 drop policy if exists "Perfis: cliente lê o próprio" on public.profiles;
-create policy "Perfis: cliente lê o próprio"
-  on public.profiles for select
-  to authenticated
-  using (id = auth.uid());
-
 drop policy if exists "Perfis: admin lê todos" on public.profiles;
-create policy "Perfis: admin lê todos"
-  on public.profiles for select
+drop policy if exists "Perfis: leitura autorizada" on public.profiles;
+create policy "Perfis: leitura autorizada" on public.profiles for select
   to authenticated
-  using (public.is_admin());
+  using (id = (select auth.uid()) or (select private.is_admin()));
 
--- Rede de segurança caso o trigger de cadastro não tenha rodado:
--- o usuário só consegue inserir o perfil com o PRÓPRIO id.
-drop policy if exists "Perfis: cliente cria o próprio" on public.profiles;
-create policy "Perfis: cliente cria o próprio"
-  on public.profiles for insert
-  to authenticated
-  with check (id = auth.uid());
-
+-- Perfis são criados exclusivamente pelo trigger de cadastro do Auth.
 drop policy if exists "Perfis: cliente atualiza o próprio" on public.profiles;
 create policy "Perfis: cliente atualiza o próprio"
   on public.profiles for update
   to authenticated
-  using (id = auth.uid())
-  with check (id = auth.uid());
+  using (id = (select auth.uid()))
+  with check (id = (select auth.uid()));
 
 -- user_roles: somente leitura do próprio papel (ou todos, para admin).
 -- SEM políticas de escrita = ninguém se promove pela API.
 drop policy if exists "Papéis: usuário lê o próprio" on public.user_roles;
-create policy "Papéis: usuário lê o próprio"
-  on public.user_roles for select
-  to authenticated
-  using (user_id = auth.uid());
-
 drop policy if exists "Papéis: admin lê todos" on public.user_roles;
-create policy "Papéis: admin lê todos"
-  on public.user_roles for select
+drop policy if exists "Papéis: leitura autorizada" on public.user_roles;
+create policy "Papéis: leitura autorizada" on public.user_roles for select
   to authenticated
-  using (public.is_admin());
+  using (user_id = (select auth.uid()) or (select private.is_admin()));
 
 -- orders: cliente lê só os próprios; admin lê todos e atualiza o andamento.
 -- Criação apenas pela função create_test_order (sem política de INSERT).
 drop policy if exists "Pedidos: cliente lê os próprios" on public.orders;
-create policy "Pedidos: cliente lê os próprios"
-  on public.orders for select
-  to authenticated
-  using (user_id = auth.uid());
-
 drop policy if exists "Pedidos: admin lê todos" on public.orders;
-create policy "Pedidos: admin lê todos"
-  on public.orders for select
+drop policy if exists "Pedidos: leitura autorizada" on public.orders;
+create policy "Pedidos: leitura autorizada" on public.orders for select
   to authenticated
-  using (public.is_admin());
+  using (user_id = (select auth.uid()) or (select private.is_admin()));
 
 drop policy if exists "Pedidos: admin atualiza andamento" on public.orders;
 create policy "Pedidos: admin atualiza andamento"
   on public.orders for update
   to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using ((select private.is_admin()))
+  with check ((select private.is_admin()));
 
 -- order_items: leitura vinculada ao dono do pedido (ou admin). Sem escrita direta.
 drop policy if exists "Itens: cliente lê os dos próprios pedidos" on public.order_items;
-create policy "Itens: cliente lê os dos próprios pedidos"
-  on public.order_items for select
-  to authenticated
-  using (
-    exists (
-      select 1
-        from public.orders o
-       where o.id = order_id
-         and o.user_id = auth.uid()
-    )
-  );
-
 drop policy if exists "Itens: admin lê todos" on public.order_items;
-create policy "Itens: admin lê todos"
-  on public.order_items for select
+drop policy if exists "Itens: leitura autorizada" on public.order_items;
+create policy "Itens: leitura autorizada" on public.order_items for select
   to authenticated
-  using (public.is_admin());
+  using ((select private.is_admin()) or exists (select 1 from public.orders o where o.id = order_id and o.user_id = (select auth.uid())));
 
 -- -----------------------------------------------------------------------------
 -- Privilégios mínimos (além do RLS, limitamos até as COLUNAS editáveis)
 -- -----------------------------------------------------------------------------
 revoke all on table public.profiles, public.user_roles, public.categories,
   public.products, public.orders, public.order_items
-  from anon, authenticated;
+  from public, anon, authenticated;
 
 grant select on table public.categories to anon, authenticated;
 grant insert, update, delete on table public.categories to authenticated;
@@ -496,8 +516,8 @@ grant insert, update, delete on table public.categories to authenticated;
 grant select on table public.products to anon, authenticated;
 grant insert, update, delete on table public.products to authenticated;
 
--- Cliente lê/insere o próprio perfil e atualiza SOMENTE o nome.
-grant select, insert on table public.profiles to authenticated;
+-- Cliente lê o próprio perfil e atualiza SOMENTE o nome.
+grant select on table public.profiles to authenticated;
 grant update (full_name) on table public.profiles to authenticated;
 
 -- Papéis: só leitura. Nada de escrita pela API.
@@ -511,15 +531,18 @@ grant update (status) on table public.orders to authenticated;
 grant select on table public.order_items to authenticated;
 
 -- Funções: execução restrita ao necessário.
-revoke all on function public.is_admin() from public, anon, authenticated;
-grant execute on function public.is_admin() to authenticated;
+revoke all on function private.is_admin() from public, anon, authenticated;
+grant execute on function private.is_admin() to authenticated;
+
+revoke all on function private.create_test_order(jsonb, uuid) from public, anon, authenticated;
+grant execute on function private.create_test_order(jsonb, uuid) to authenticated;
 
 revoke all on function public.create_test_order(jsonb, uuid) from public, anon, authenticated;
 grant execute on function public.create_test_order(jsonb, uuid) to authenticated;
 
 -- Funções de trigger não devem ser chamáveis pela API.
-revoke all on function public.handle_new_user() from public, anon, authenticated;
-revoke all on function public.set_updated_at() from public, anon, authenticated;
+revoke all on function private.handle_new_user() from public, anon, authenticated;
+revoke all on function private.set_updated_at() from public, anon, authenticated;
 
 -- -----------------------------------------------------------------------------
 -- Storage: bucket público SOMENTE com fotos do catálogo
@@ -547,19 +570,19 @@ drop policy if exists "Fotos: admin envia" on storage.objects;
 create policy "Fotos: admin envia"
   on storage.objects for insert
   to authenticated
-  with check (bucket_id = 'product-images' and public.is_admin());
+  with check (bucket_id = 'product-images' and (select private.is_admin()));
 
 drop policy if exists "Fotos: admin atualiza" on storage.objects;
 create policy "Fotos: admin atualiza"
   on storage.objects for update
   to authenticated
-  using (bucket_id = 'product-images' and public.is_admin())
-  with check (bucket_id = 'product-images' and public.is_admin());
+  using (bucket_id = 'product-images' and (select private.is_admin()))
+  with check (bucket_id = 'product-images' and (select private.is_admin()));
 
 drop policy if exists "Fotos: admin exclui" on storage.objects;
 create policy "Fotos: admin exclui"
   on storage.objects for delete
   to authenticated
-  using (bucket_id = 'product-images' and public.is_admin());
+  using (bucket_id = 'product-images' and (select private.is_admin()));
 
 -- Fim. Próximo passo: execute supabase/seed.sql.

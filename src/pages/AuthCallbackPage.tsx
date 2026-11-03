@@ -30,14 +30,11 @@ function readInitialLinkError(): string | null {
 export function AuthCallbackPage() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | null>(readInitialLinkError)
-  const handledRef = useRef(false)
+  const confirmationRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     // Se o próprio link já chegou com erro, só mostramos a mensagem.
     if (error) return
-    if (handledRef.current) return
-    handledRef.current = true
-
     const supabase = requireSupabase()
     const query = new URLSearchParams(window.location.search)
 
@@ -55,26 +52,33 @@ export function AuthCallbackPage() {
       if (session) goToAccount()
     })
 
-    async function finishFromLink() {
+    async function confirmLink() {
       const tokenHash = query.get('token_hash')
       const type = query.get('type') as EmailOtpType | null
       const code = query.get('code')
-
-      try {
-        if (tokenHash && type) {
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: tokenHash,
-            type,
-          })
-          if (verifyError) throw verifyError
-        } else if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-          if (exchangeError) {
-            // A troca pode já ter sido feita automaticamente pelo cliente.
-            const { data } = await supabase.auth.getSession()
-            if (!data.session) throw exchangeError
-          }
+      if (tokenHash && type) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type,
+        })
+        if (verifyError) throw verifyError
+      } else if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+        if (exchangeError) {
+          // A troca pode já ter sido feita automaticamente pelo cliente.
+          const { data } = await supabase.auth.getSession()
+          if (!data.session) throw exchangeError
         }
+      }
+    }
+
+    // Reutiliza a confirmação em andamento no replay de efeitos do StrictMode.
+    // Cada efeito mantém sua própria assinatura e observa a mesma Promise.
+    if (!confirmationRef.current) confirmationRef.current = confirmLink()
+
+    async function finishFromLink() {
+      try {
+        await confirmationRef.current
         const { data } = await supabase.auth.getSession()
         if (data.session) {
           goToAccount()

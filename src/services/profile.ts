@@ -1,4 +1,3 @@
-import type { User } from '@supabase/supabase-js'
 import { requireSupabase } from '../lib/supabase'
 import type { Profile, UserRole } from '../types/database'
 
@@ -32,27 +31,6 @@ export async function getMyRole(userId: string): Promise<UserRole> {
     .maybeSingle<{ role: UserRole }>()
   throwIfError(error)
   return data?.role === 'admin' ? 'admin' : 'customer'
-}
-
-/**
- * Garante que exista o perfil do usuário. Normalmente o trigger
- * `handle_new_user` já criou a linha no cadastro; esta função é apenas
- * uma rede de segurança (RLS permite inserir somente o próprio perfil).
- */
-export async function ensureProfile(user: User): Promise<Profile | null> {
-  const existing = await getProfile(user.id)
-  if (existing) return existing
-
-  const supabase = requireSupabase()
-  const fullName =
-    typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : ''
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert({ id: user.id, full_name: fullName, email: user.email ?? '' })
-    .select('*')
-    .single<Profile>()
-  throwIfError(error)
-  return data ?? null
 }
 
 /**

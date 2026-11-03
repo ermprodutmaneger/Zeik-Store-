@@ -2,11 +2,11 @@
 
 Guia para conectar o Supabase e publicar a loja. O código já está implementado neste repositório (React + TypeScript + Vite), com `supabase/schema.sql`, `supabase/seed.sql`, `supabase/admin.sql`, scripts de validação e o rewrite de SPA em `vercel.json`.
 
-**Ainda falta (esta é a sua parte):** criar o projeto Supabase de testes, executar os SQLs, preencher as variáveis, promover sua conta a administradora e publicar na Vercel. Nada disso altera outros projetos: use um projeto Supabase **exclusivo** para a Zeik Store.
+**Ambiente preparado:** o projeto Supabase exclusivo `zeik-store` já recebeu o schema e os oito produtos de exemplo; as variáveis públicas estão configuradas no projeto Vercel `zeik-store`, vinculado a este repositório. As seções abaixo também permitem reproduzir a configuração em outro ambiente de testes. Antes de usar e-mails, configure os links de produção; sua conta administrativa deve ser criada e identificada pelo UUID.
 
 ## 1. Pré-requisitos e instalação local
 
-1. Node.js **20.19 ou mais novo** (o Vite atual exige isso; confira com `node -v`).
+1. Node.js **24.x** (mesma versão configurada na Vercel; confira com `node -v`).
 2. Na raiz do repositório (onde está o `package.json`), instale as versões exatas do lockfile:
 
    ```bash
