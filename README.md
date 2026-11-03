@@ -2,7 +2,7 @@
 
 Loja de testes completa para aprender **Supabase na prática**: autenticação real, banco PostgreSQL com Row Level Security (RLS), upload de fotos no Storage e painel de administrador — com pedidos de teste **sem cobrança**.
 
-**Estado atual:** código verificado com lint e build; banco e Storage configurados no projeto exclusivo `zeik-store`, na região de São Paulo. O projeto Vercel `zeik-store` está vinculado a este repositório com as variáveis públicas configuradas. O primeiro acesso pessoal e os fluxos de e-mail devem seguir as instruções de [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md).
+**Estado atual:** código verificado com lint e build; banco e Storage configurados no projeto exclusivo `zeik-store`, na região de São Paulo. O projeto Vercel `zeik-store` está vinculado a este repositório com as variáveis públicas configuradas. A loja está publicada em [zeik-store.vercel.app](https://zeik-store.vercel.app/), com o endereço de produção e os retornos de confirmação e recuperação já configurados no Supabase. O primeiro teste por e-mail e a identificação da conta administrativa seguem o roteiro de [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md).
 
 ## Recursos implementados
 
@@ -96,9 +96,11 @@ Rotas principais: `/` (vitrine), `/produto/:slug`, `/carrinho`, `/entrar`, `/cad
 
 ## Primeiro acesso
 
-1. Configure os links de confirmação e recuperação para a URL real do deploy, conforme o guia.
-2. Crie sua conta pela loja e confirme o e-mail.
+1. Os links de confirmação e recuperação já estão configurados para `https://zeik-store.vercel.app`.
+2. Crie sua conta pela loja e confirme o e-mail. Neste teste com o SMTP padrão do Supabase, use um e-mail membro da equipe do projeto; endereços externos precisam de SMTP próprio.
 3. Promova somente o UUID dessa conta usando o procedimento administrativo. Não existe conta nem senha administrativa padrão.
 4. Valide confirmação/recuperação por e-mail e upload de fotos com sua conta. Os testes SQL não substituem a entrega real de e-mail ou o upload completo pelo navegador.
+
+Os fluxos reais de entrega de e-mail e o acesso administrativo com a conta pessoal ainda precisam ser validados. Consulte os [limites do SMTP padrão](https://supabase.com/docs/guides/auth/auth-smtp) antes de abrir o cadastro a outras pessoas.
 
 Nenhum pedido desta fase é cobrado ou marcado como pago.

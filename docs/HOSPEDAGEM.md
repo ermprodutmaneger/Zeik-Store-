@@ -2,7 +2,7 @@
 
 Guia para conectar o Supabase e publicar a loja. O código já está implementado neste repositório (React + TypeScript + Vite), com `supabase/schema.sql`, `supabase/seed.sql`, `supabase/admin.sql`, scripts de validação e o rewrite de SPA em `vercel.json`.
 
-**Ambiente preparado:** o projeto Supabase exclusivo `zeik-store` já recebeu o schema e os oito produtos de exemplo; as variáveis públicas estão configuradas no projeto Vercel `zeik-store`, vinculado a este repositório. As seções abaixo também permitem reproduzir a configuração em outro ambiente de testes. Antes de usar e-mails, configure os links de produção; sua conta administrativa deve ser criada e identificada pelo UUID.
+**Ambiente preparado:** o projeto Supabase exclusivo `zeik-store` já recebeu o schema e os oito produtos de exemplo; as variáveis públicas estão configuradas no projeto Vercel `zeik-store`, vinculado a este repositório. As seções abaixo também permitem reproduzir a configuração em outro ambiente de testes. O endereço de produção e os dois retornos de autenticação já estão configurados para `https://zeik-store.vercel.app`. A conta administrativa deve ser identificada explicitamente e promovida pelo UUID.
 
 ## 1. Pré-requisitos e instalação local
 
@@ -43,17 +43,16 @@ No **SQL Editor** do projeto de teste correto, execute nesta ordem:
 2. Em **Authentication → URL Configuration**, cadastre os endereços que o app usa:
    - A página `/auth/callback` recebe o link de confirmação de cadastro.
    - A página `/redefinir-senha` recebe o link de recuperação de senha.
-3. **Desenvolvimento** (endereço mostrado pelo Vite, em geral `http://localhost:5173`):
-   - Site URL: `http://localhost:5173`
+3. **Desenvolvimento opcional** (endereço mostrado pelo Vite, em geral `http://localhost:5173`): mantenha a Site URL de produção e adicione estes retornos somente quando for testar localmente:
    - Redirect URLs:
      - `http://localhost:5173/auth/callback`
      - `http://localhost:5173/redefinir-senha`
-4. **Produção**: depois do primeiro deploy, troque pela URL real que a Vercel der (não invente antes):
-   - Site URL: `https://SUA-LOJA.vercel.app`
+4. **Produção (já configurada neste projeto)**:
+   - Site URL: `https://zeik-store.vercel.app`
    - Redirect URLs (adicione sem apagar as de desenvolvimento, se ainda testar local):
-     - `https://SUA-LOJA.vercel.app/auth/callback`
-     - `https://SUA-LOJA.vercel.app/redefinir-senha`
-5. Confira o envio de e-mails do projeto. O remetente padrão do Supabase tem limites; se os e-mails de teste não chegarem, configure um SMTP próprio em **Project Settings → Authentication** antes de considerar confirmação/recuperação validadas.
+     - `https://zeik-store.vercel.app/auth/callback`
+     - `https://zeik-store.vercel.app/redefinir-senha`
+5. O projeto usa o serviço SMTP padrão do Supabase, destinado a testes com os e-mails dos membros da equipe. Para cadastro e recuperação por endereços externos, configure um SMTP próprio em **Authentication → Emails → SMTP Settings**. Confirmação e recuperação só devem ser consideradas validadas após receber e abrir os e-mails reais.
 
 ## 5. Publicar na Vercel pelo GitHub
 
@@ -83,6 +82,7 @@ No **SQL Editor** do projeto de teste correto, execute nesta ordem:
 
 - [Supabase com React](https://supabase.com/docs/guides/getting-started/quickstarts/reactjs)
 - [Autenticação por senha](https://supabase.com/docs/guides/auth/passwords)
+- [SMTP e restrições do envio padrão](https://supabase.com/docs/guides/auth/auth-smtp)
 - [URLs de retorno](https://supabase.com/docs/guides/auth/redirect-urls)
 - [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)
 - [Chaves de API](https://supabase.com/docs/guides/getting-started/api-keys)
