@@ -1,6 +1,6 @@
 # Zeik Store
 
-O checkout Pix e as mensalidades podem ser ativados no Asaas. Veja o [guia de configuração e homologação](docs/PAGAMENTOS.md).
+O checkout Pix e as mensalidades podem ser ativados no Mercado Pago ou no Asaas. Veja o [guia de configuração e homologação](docs/PAGAMENTOS.md).
 
 Loja de testes completa para aprender **Supabase na prática**: autenticação real, banco PostgreSQL com Row Level Security (RLS), upload de fotos no Storage e painel de administrador — com pedidos de teste **sem cobrança**.
 

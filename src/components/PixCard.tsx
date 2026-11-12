@@ -1,9 +1,15 @@
 import { useId, useState } from 'react'
 import { Copy } from 'lucide-react'
 import { Alert } from './Alert'
-import { type Pix } from '../services/billing'
+import { type BillingProvider, type Pix } from '../services/billing'
 
-export function PixCard({ pix, sandbox }: { pix: Pix; sandbox: boolean }) {
+function providerName(provider: BillingProvider) {
+  return provider === 'mercadopago' ? 'Mercado Pago' : 'Asaas'
+}
+
+export function PixCard({ pix, sandbox, provider = 'asaas' }: {
+  pix: Pix; sandbox: boolean; provider?: BillingProvider
+}) {
   const field = useId()
   const [message, setMessage] = useState('')
 
@@ -18,8 +24,13 @@ export function PixCard({ pix, sandbox }: { pix: Pix; sandbox: boolean }) {
 
   return (
     <div className="pix-card">
-      {sandbox ? <Alert variant="info">Pix de teste do Asaas. Use o simulador do Asaas para confirmar.</Alert> : null}
-      <img width="192" height="192" src={`data:image/png;base64,${pix.encodedImage}`} alt="QR Code Pix da cobrança" />
+      {sandbox ? <Alert variant="info">
+        {provider === 'mercadopago'
+          ? 'Simulação do Mercado Pago. O resultado de teste é atualizado automaticamente.'
+          : 'Pix de teste do Asaas. Use o simulador do Asaas para confirmar.'}
+      </Alert> : null}
+      {pix.encodedImage ? <img width="192" height="192" src={`data:image/png;base64,${pix.encodedImage}`} alt="QR Code Pix da cobrança" /> : null}
+      {pix.ticketUrl ? <a href={pix.ticketUrl} target="_blank" rel="noreferrer">Abrir instruções do Pix no Mercado Pago</a> : null}
       <div className="field">
         <label htmlFor={field}>Pix Copia e Cola</label>
         <div className="pix-copy">
@@ -34,14 +45,16 @@ export function PixCard({ pix, sandbox }: { pix: Pix; sandbox: boolean }) {
   )
 }
 
-export function BillingDocument({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function BillingDocument({ value, onChange, provider = 'asaas' }: {
+  value: string; onChange: (value: string) => void; provider?: BillingProvider
+}) {
   const field = useId()
   return (
     <div className="field">
       <label htmlFor={field}>CPF ou CNPJ do pagador</label>
       <input id={field} className="input" value={value} onChange={(e) => onChange(e.target.value)}
         autoComplete="off" maxLength={22} required />
-      <p className="muted small">Enviado ao Asaas para identificar o pagador.</p>
+      <p className="muted small">Enviado ao {providerName(provider)} para identificar o pagador.</p>
     </div>
   )
 }

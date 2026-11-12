@@ -1,5 +1,6 @@
 import { requireSupabase } from '../lib/supabase'
 
+export type BillingProvider = 'asaas' | 'mercadopago'
 export type BillingMode = 'sandbox' | 'production'
 export type PaymentStatus = 'pending' | 'overdue' | 'paid' | 'refund_pending' | 'refunded' | 'canceled' | 'review'
 export type FiscalStatus = 'waiting' | 'required' | 'processing' | 'authorized' | 'error'
@@ -13,6 +14,7 @@ export interface BillingPlan {
 
 export interface BillingConfig {
   mode: BillingMode | null
+  provider: BillingProvider | null
   pickup: string | null
   plans: BillingPlan[]
   legacyCheckout: boolean
@@ -32,12 +34,14 @@ export interface Charge {
   fiscalKey: string | null
   canRefund: boolean
   mode: BillingMode
+  provider: BillingProvider
 }
 
 export interface Pix {
   encodedImage: string
   payload: string
   expirationDate: string
+  ticketUrl?: string | null
 }
 
 export interface Membership {
@@ -92,8 +96,8 @@ export const getOrderCharge = (orderId: string) =>
   request<Charge>({ action: 'order', orderId })
 export const createOrderPix = (orderId: string, document: string) =>
   request<Pix>({ action: 'order-pix', orderId, document })
-export const getPix = (paymentId: string) =>
-  request<Pix>({ action: 'pix', paymentId })
+export const getPix = (paymentId: string, document?: string) =>
+  request<Pix>({ action: 'pix', paymentId, document })
 export const getMemberships = () => request<Membership[]>({ action: 'overview' })
 export const subscribeToPlan = (planId: string, document: string) =>
   request<{ membershipId: string }>({ action: 'subscribe', planId, document })

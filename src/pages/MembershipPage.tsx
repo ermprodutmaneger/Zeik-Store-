@@ -13,6 +13,7 @@ export function MembershipPage() {
   const { config, error: configError } = useBillingConfig()
   const [memberships, setMemberships] = useState<Membership[]>([])
   const [document, setDocument] = useState('')
+  const [paymentForm, setPaymentForm] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [pix, setPix] = useState<{ chargeId: string; code: Pix } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -53,7 +54,12 @@ export function MembershipPage() {
   }
 
   function showPix(charge: Charge) {
-    void run(async () => setPix({ chargeId: charge.id, code: await getPix(charge.id) }))
+    void run(async () => {
+      const code = await getPix(charge.id, document)
+      setPix(code.payload ? { chargeId: charge.id, code } : null)
+      setPaymentForm(null)
+      setDocument('')
+    })
   }
 
   return (
@@ -61,12 +67,14 @@ export function MembershipPage() {
       <h1 className="page-title">Minhas mensalidades</h1>
       <p className="page-subtitle">Acompanhe o vencimento, pague por Pix e acesse os benefícios do seu plano.</p>
       {configError || error ? <Alert variant="error">{configError || error}</Alert> : null}
-      {mode === 'sandbox' ? <Alert variant="info">Ambiente de testes do Asaas.</Alert> : null}
+      {mode === 'sandbox' ? <Alert variant="info">Ambiente de testes de pagamento.</Alert> : null}
 
       <div className="billing-stack">
         {memberships.map((membership) => {
           const payable = (charge: Charge) =>
             !membership.canceledAt && ['pending', 'overdue'].includes(charge.status)
+          const needsDocument = (charge: Charge) =>
+            charge.provider === 'mercadopago' && charge.mode === 'production' && !charge.hasPix
           return (
             <article className="card billing-panel" key={membership.id}>
               <div className="billing-heading">
@@ -80,7 +88,7 @@ export function MembershipPage() {
               </p>
               {membership.content ? <p className="member-content">{membership.content}</p> : null}
               {membership.ready && !membership.canceledAt && membership.payments.length === 0
-                ? <p role="status">O Asaas está gerando a primeira mensalidade.</p> : null}
+                ? <p role="status">A primeira mensalidade está sendo gerada.</p> : null}
               {membership.payments.map((charge) => (
                 <div className="billing-charge" key={charge.id}>
                   <div className="billing-heading">
@@ -88,13 +96,26 @@ export function MembershipPage() {
                       <strong>{PAYMENT_LABELS[charge.status]}</strong><br />
                       <span className="small muted">Vencimento {formatBillingDate(charge.dueOn)}</span>
                     </p>
-                    {payable(charge) ? (
-                      <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => showPix(charge)}>
-                        Ver Pix
+                    {payable(charge) && paymentForm !== charge.id ? (
+                      <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => {
+                        if (needsDocument(charge)) {
+                          setPaymentForm(charge.id)
+                          setSelected(null)
+                          setDocument('')
+                        } else showPix(charge)
+                      }}>
+                        {charge.hasPix ? 'Ver Pix' : 'Gerar Pix'}
                       </button>
                     ) : null}
                   </div>
-                  {payable(charge) && pix?.chargeId === charge.id ? <PixCard pix={pix.code} sandbox={charge.mode === 'sandbox'} /> : null}
+                  {payable(charge) && paymentForm === charge.id ? (
+                    <form className="billing-form" onSubmit={(event) => { event.preventDefault(); showPix(charge) }}>
+                      <BillingDocument value={document} onChange={setDocument} provider={charge.provider} />
+                      <button className="btn btn-primary btn-sm" disabled={busy}>Gerar Pix</button>
+                    </form>
+                  ) : null}
+                  {payable(charge) && pix?.chargeId === charge.id
+                    ? <PixCard pix={pix.code} sandbox={charge.mode === 'sandbox'} provider={charge.provider} /> : null}
                   {charge.fiscalUrl ? <a href={charge.fiscalUrl} target="_blank" rel="noreferrer">Abrir NFS-e</a>
                     : charge.status === 'paid' ? <p className="small muted">NFS-e · {FISCAL_LABELS[charge.fiscalStatus]}</p> : null}
                 </div>
@@ -126,14 +147,14 @@ export function MembershipPage() {
               <p className="muted small">Um Pix por mês. Você paga cada cobrança no banco e pode cancelar a renovação aqui.</p>
               {selected === plan.id ? (
                 <form className="billing-form" onSubmit={(event) => subscribe(event, plan.id)}>
-                  <BillingDocument value={document} onChange={setDocument} />
+                  {config.provider === 'mercadopago' ? null : <BillingDocument value={document} onChange={setDocument} />}
                   <button type="submit" className="btn btn-primary" disabled={busy}>
                     {busy ? 'Registrando…' : 'Confirmar assinatura mensal'}
                   </button>
                 </form>
               ) : (
                 <button type="button" className="btn btn-primary" disabled={busy}
-                  onClick={() => { setSelected(plan.id); setDocument('') }}>
+                  onClick={() => { setSelected(plan.id); setPaymentForm(null); setDocument('') }}>
                   {existing ? 'Concluir assinatura' : 'Assinar com Pix'}
                 </button>
               )}

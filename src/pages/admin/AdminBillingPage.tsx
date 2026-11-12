@@ -36,7 +36,7 @@ export function AdminBillingPage() {
   }
 
   async function refund(charge: Charge) {
-    if (!window.confirm(`Solicitar ao Asaas a devolução integral de ${formatBRL(charge.amountCents)}?`)) return
+    if (!window.confirm(`Solicitar a devolução integral de ${formatBRL(charge.amountCents)}?`)) return
     setBusy(true)
     setError(null)
     setMessage('')
@@ -76,8 +76,8 @@ export function AdminBillingPage() {
       </div>
       {configError || error ? <Alert variant="error">{configError || error}</Alert> : null}
       {message ? <Alert variant="success">{message}</Alert> : null}
-      {config && !mode ? <Alert variant="info">Ative o Asaas para consultar e estornar cobranças Pix.</Alert> : null}
-      {mode === 'sandbox' ? <Alert variant="info">Cobranças de teste do Asaas.</Alert> : null}
+      {config && !mode ? <Alert variant="info">Configure o provedor para consultar e estornar cobranças Pix.</Alert> : null}
+      {mode === 'sandbox' ? <Alert variant="info">Cobranças em ambiente de teste.</Alert> : null}
       {mode && charges?.length === 0 ? <p className="muted">Nenhuma cobrança neste ambiente.</p> : null}
       <div className="billing-stack">
         {charges?.map((charge) => (
@@ -86,7 +86,7 @@ export function AdminBillingPage() {
               <h3>{charge.orderId ? `Pedido #${shortId(charge.orderId)}` : `Mensalidade #${shortId(charge.id)}`}</h3>
               <strong>{formatBRL(charge.amountCents)}</strong>
             </div>
-            <p>{PAYMENT_LABELS[charge.status]} · Vence {formatBillingDate(charge.dueOn)}</p>
+            <p>{charge.provider === 'mercadopago' ? 'Mercado Pago' : 'Asaas'} · {PAYMENT_LABELS[charge.status]} · Vence {formatBillingDate(charge.dueOn)}</p>
             <p className="muted small">{charge.orderId ? 'NF-e' : 'NFS-e'} · {FISCAL_LABELS[charge.fiscalStatus]}</p>
             {charge.fiscalUrl ? <a href={charge.fiscalUrl} target="_blank" rel="noreferrer">Abrir nota fiscal</a> : null}
             {charge.fiscalKey ? <p className="small" style={{ overflowWrap: 'anywhere' }}>{charge.fiscalKey}</p> : null}

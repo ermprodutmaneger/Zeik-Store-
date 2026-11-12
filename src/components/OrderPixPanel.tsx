@@ -35,7 +35,8 @@ export function OrderPixPanel({ orderId, pickup }: { orderId: string; pickup: st
     setBusy(true)
     setError(null)
     try {
-      setPix(charge.hasPix ? await getPix(charge.id) : await createOrderPix(orderId, document))
+      const code = charge.hasPix ? await getPix(charge.id) : await createOrderPix(orderId, document)
+      setPix(code.payload ? code : null)
       setDocument('')
       setCharge(await getOrderCharge(orderId))
     } catch (failure) {
@@ -46,6 +47,8 @@ export function OrderPixPanel({ orderId, pickup }: { orderId: string; pickup: st
   }
 
   const waiting = charge?.status === 'pending'
+  const needsDocument = charge && !charge.hasPix &&
+    (charge.provider !== 'mercadopago' || charge.mode !== 'sandbox')
   return (
     <section className="card billing-panel" aria-label="Pagamento do pedido">
       {charge ? (
@@ -61,10 +64,10 @@ export function OrderPixPanel({ orderId, pickup }: { orderId: string; pickup: st
             <p className="small" style={{ overflowWrap: 'anywhere' }}><strong>Chave da NF-e</strong><br />{charge.fiscalKey}</p>
           ) : charge.status === 'paid' ? <p className="small muted">NF-e · {FISCAL_LABELS[charge.fiscalStatus]}</p> : null}
           {charge.fiscalUrl ? <a href={charge.fiscalUrl} target="_blank" rel="noreferrer">Abrir nota fiscal</a> : null}
-          {waiting && pix ? <PixCard pix={pix} sandbox={charge.mode === 'sandbox'} /> : null}
+          {waiting && pix ? <PixCard pix={pix} sandbox={charge.mode === 'sandbox'} provider={charge.provider} /> : null}
           {waiting && !pix ? (
             <form onSubmit={showPix} className="billing-form">
-              {charge.hasPix ? null : <BillingDocument value={document} onChange={setDocument} />}
+              {needsDocument ? <BillingDocument value={document} onChange={setDocument} provider={charge.provider} /> : null}
               <button className="btn btn-primary" disabled={busy}>
                 {busy ? 'Carregando…' : charge.hasPix ? 'Ver QR Code' : 'Gerar Pix'}
               </button>

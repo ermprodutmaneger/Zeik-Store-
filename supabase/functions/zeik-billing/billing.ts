@@ -5,11 +5,14 @@ import {
 } from './asaas.ts'
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-type Status = 'pending' | 'overdue' | 'paid' | 'refund_pending' | 'refunded' | 'canceled' | 'review'
+export type BillingProvider = 'asaas' | 'mercadopago'
+export type Status = 'pending' | 'overdue' | 'paid' | 'refund_pending' | 'refunded' | 'canceled' | 'review'
 
-interface Payment {
+export interface Payment {
   id: string
   mode: Mode
+  gateway: BillingProvider
+  attempt_key: string
   order_id: string | null
   membership_id: string | null
   provider_id: string | null
@@ -34,7 +37,7 @@ interface Plan {
   is_active: boolean
 }
 
-interface Membership {
+export interface Membership {
   id: string
   user_id: string
   plan_id: string
@@ -49,6 +52,7 @@ export interface EventRow {
   mode: Mode
   event_id: string
   resource_id: string
+  gateway?: BillingProvider
   event_type: string
 }
 
@@ -64,7 +68,7 @@ export function parseId(value: unknown): string {
   return value.toLowerCase()
 }
 
-function parseDocument(value: unknown): string {
+export function parseDocument(value: unknown): string {
   const doc = typeof value === 'string' ? value.slice(0, 30).replace(/[.\/\s-]/g, '').toUpperCase() : ''
   if (!/^(\d{11}|[A-Z0-9]{12}\d{2})$/.test(doc) || /^(\d)\1+$/.test(doc)) {
     throw new RequestError(400, 'Informe um CPF ou CNPJ válido.')
@@ -95,11 +99,12 @@ function paymentView(row: Payment) {
   return {
     id: row.id, orderId: row.order_id, membershipId: row.membership_id,
     amountCents: row.amount_cents, dueOn: row.due_on,
-    status: row.status === 'paid' && row.refund_requested_at ? 'refund_pending' : row.status,
+    status: row.status === 'paid' && row.refund_requested_at ? 'refund_pending'
+      : row.status === 'pending' && row.due_on < saoPauloToday() ? 'overdue' : row.status,
     hasPix: Boolean(row.provider_id), paidAt: row.paid_at, fiscalStatus: row.fiscal_status,
     fiscalUrl: row.fiscal_url, fiscalKey: row.order_id ? row.fiscal_provider_id : null,
     canRefund: row.status === 'paid' && !row.refund_requested_at,
-    mode: row.mode,
+    mode: row.mode, provider: row.gateway,
   }
 }
 
@@ -111,13 +116,9 @@ function providerListItem<T extends { id: string; externalReference?: string | n
   return matches[0]
 }
 
-export class Billing {
-  readonly gateway: Asaas
-  readonly mode: Mode
-  constructor(readonly db: SupabaseClient, readonly config: GatewayConfig) {
-    this.gateway = new Asaas(config)
-    this.mode = config.mode
-  }
+export class BillingStore {
+  constructor(readonly db: SupabaseClient, readonly mode: Mode, readonly pickup: string,
+    readonly provider: BillingProvider) {}
 
   async getPlan(id: string) {
     return checked(await this.db.from('billing_plans').select('*')
@@ -126,12 +127,12 @@ export class Billing {
 
   async findMembership(id: string) {
     return checked(await this.db.from('billing_memberships').select('*')
-      .eq('id', id).eq('mode', this.mode).maybeSingle<Membership>())
+      .eq('id', id).eq('mode', this.mode).eq('gateway', this.provider).maybeSingle<Membership>())
   }
 
   async findPayment(id: string) {
     return checked(await this.db.from('billing_payments').select('*')
-      .eq('id', id).eq('mode', this.mode).maybeSingle<Payment>())
+      .eq('id', id).eq('mode', this.mode).eq('gateway', this.provider).maybeSingle<Payment>())
   }
 
   async listPlans() {
@@ -141,7 +142,7 @@ export class Billing {
   }
 
   async createOrder(user: User, items: unknown, key: unknown) {
-    if (!this.config.pickup) throw new RequestError(503, 'A retirada da loja está em configuração.')
+    if (!this.pickup) throw new RequestError(503, 'A retirada da loja está em configuração.')
     if (!Array.isArray(items) || !items.length || items.length > 50) {
       throw new RequestError(400, 'Revise os itens do seu carrinho.')
     }
@@ -154,7 +155,7 @@ export class Billing {
     })
     const result = await this.db.rpc('billing_create_order', {
       p_items: safeItems, p_idempotency_key: parseId(key), p_user_id: user.id,
-      p_mode: this.mode, p_pickup: this.config.pickup.slice(0, 800),
+      p_mode: this.mode, p_gateway: this.provider, p_pickup: this.pickup.slice(0, 800),
     })
     if (result.error?.code === 'P0001') throw new RequestError(409, result.error.message)
     return { orderId: checked(result) as string }
@@ -168,6 +169,53 @@ export class Billing {
       .eq('order_id', order.id).maybeSingle<Payment>())
     if (!payment) throw new RequestError(404, 'Cobrança não encontrada.')
     return paymentView(payment)
+  }
+
+  async memberOverview(user: User) {
+    const rows = checked(await this.db.from('billing_memberships').select('*')
+      .eq('user_id', user.id).eq('mode', this.mode).eq('gateway', this.provider)
+      .order('created_at', { ascending: false }).returns<Membership[]>()) ?? []
+    return await Promise.all(rows.map(async (membership) => {
+      const [plan, untilResult, chargesResult] = await Promise.all([
+        this.getPlan(membership.plan_id),
+        this.db.rpc('billing_membership_until', { p_id: membership.id }),
+        this.db.from('billing_payments').select('*').eq('membership_id', membership.id)
+          .order('due_on', { ascending: false }).limit(15).returns<Payment[]>(),
+      ])
+      const until = checked(untilResult) as string | null
+      const active = Boolean(until && until >= saoPauloToday())
+      return {
+        id: membership.id, planId: membership.plan_id, name: plan?.name ?? 'Mensalidade',
+        monthlyCents: membership.monthly_cents, ready: this.provider === 'mercadopago' || Boolean(membership.provider_id),
+        canceledAt: membership.canceled_at, active, until,
+        content: active ? plan?.member_content ?? null : null,
+        payments: (checked(chargesResult) ?? []).map(paymentView),
+      }
+    }))
+  }
+
+  async adminPayments() {
+    const rows = checked(await this.db.from('billing_payments').select('*')
+      .eq('mode', this.mode).eq('gateway', this.provider).order('created_at', { ascending: false }).limit(100).returns<Payment[]>())
+    return (rows ?? []).map(paymentView)
+  }
+
+  async registerNfe(id: string, value: unknown) {
+    const key = typeof value === 'string' ? value.replace(/\s/g, '') : ''
+    if (!/^\d{44}$/.test(key)) throw new RequestError(400, 'Informe os 44 dígitos da chave da NF-e.')
+    const row = checked(await this.db.from('billing_payments')
+      .update({ fiscal_provider_id: key, fiscal_status: 'authorized' })
+      .eq('id', id).eq('mode', this.mode).eq('gateway', this.provider).eq('status', 'paid').not('order_id', 'is', null)
+      .is('refund_requested_at', null).select('id').maybeSingle())
+    if (!row) throw new RequestError(409, 'A nota deve estar vinculada a um pedido Pix pago.')
+  }
+}
+
+export class Billing extends BillingStore {
+  readonly gateway: Asaas
+  constructor(db: SupabaseClient, readonly config: GatewayConfig) {
+    super(db, config.mode, config.pickup, 'asaas')
+    this.gateway = new Asaas(config)
   }
 
   async customer(user: User, document: unknown) {
@@ -237,39 +285,16 @@ export class Billing {
     return await this.gateway.pix(payment.provider_id)
   }
 
-  async memberOverview(user: User) {
-    const rows = checked(await this.db.from('billing_memberships').select('*')
-      .eq('user_id', user.id).eq('mode', this.mode)
-      .order('created_at', { ascending: false }).returns<Membership[]>()) ?? []
-    return await Promise.all(rows.map(async (membership) => {
-      const [plan, untilResult, chargesResult] = await Promise.all([
-        this.getPlan(membership.plan_id),
-        this.db.rpc('billing_membership_until', { p_id: membership.id }),
-        this.db.from('billing_payments').select('*').eq('membership_id', membership.id)
-          .order('due_on', { ascending: false }).limit(15).returns<Payment[]>(),
-      ])
-      const until = checked(untilResult) as string | null
-      const active = Boolean(until && until >= saoPauloToday())
-      return {
-        id: membership.id, planId: membership.plan_id, name: plan?.name ?? 'Mensalidade',
-        monthlyCents: membership.monthly_cents, ready: Boolean(membership.provider_id),
-        canceledAt: membership.canceled_at, active, until,
-        content: active ? plan?.member_content ?? null : null,
-        payments: (checked(chargesResult) ?? []).map(paymentView),
-      }
-    }))
-  }
-
   async subscribe(user: User, planId: string, document: unknown) {
     const plan = await this.getPlan(planId)
     if (!plan?.is_active) throw new RequestError(404, 'Plano indisponível.')
     const lookup = async () => checked(await this.db.from('billing_memberships').select('*')
-      .eq('user_id', user.id).eq('plan_id', plan.id).eq('mode', this.mode)
+      .eq('user_id', user.id).eq('plan_id', plan.id).eq('mode', this.mode).eq('gateway', this.provider)
       .is('canceled_at', null).maybeSingle<Membership>())
     let membership = await lookup()
     if (!membership) {
       const insert = await this.db.from('billing_memberships').insert({
-        user_id: user.id, plan_id: plan.id, monthly_cents: plan.monthly_cents, mode: this.mode,
+        user_id: user.id, plan_id: plan.id, monthly_cents: plan.monthly_cents, mode: this.mode, gateway: this.provider,
       }).select('*').single<Membership>()
       membership = insert.error?.code === '23505' ? await lookup() : checked(insert)
     }
@@ -356,12 +381,12 @@ export class Billing {
 
   async recordPayment(remote: AsaasPayment, override?: Status): Promise<Payment | null> {
     const known = checked(await this.db.from('billing_payments').select('*')
-      .eq('mode', this.mode).eq('provider_id', remote.id).maybeSingle<Payment>())
+      .eq('mode', this.mode).eq('gateway', this.provider).eq('provider_id', remote.id).maybeSingle<Payment>())
     let membershipId = known?.membership_id ?? null
     let paymentId = known?.order_id ? known.id : null
     if (!known && remote.subscription) {
       const linked = checked(await this.db.from('billing_memberships').select('id')
-        .eq('mode', this.mode).eq('provider_id', remote.subscription).maybeSingle())
+        .eq('mode', this.mode).eq('gateway', this.provider).eq('provider_id', remote.subscription).maybeSingle())
       membershipId = linked?.id ??
         (await this.linkSubscription(await this.gateway.subscription(remote.subscription)))?.id ?? null
     }
@@ -453,7 +478,7 @@ export class Billing {
         }
         // Em exclusões, use só o ID que já foi vinculado à loja.
         const row = checked(await this.db.from('billing_payments').select('*')
-          .eq('mode', this.mode).eq('provider_id', event.resource_id).maybeSingle<Payment>())
+          .eq('mode', this.mode).eq('gateway', this.provider).eq('provider_id', event.resource_id).maybeSingle<Payment>())
         if (row) {
           await this.recordPayment({
             id: event.resource_id, status: 'PENDING', billingType: 'PIX',
@@ -469,13 +494,13 @@ export class Billing {
         if (!(error instanceof GatewayError && error.status === 404 &&
           ['SUBSCRIPTION_DELETED', 'SUBSCRIPTION_INACTIVATED'].includes(event.event_type))) throw error
         checked(await this.db.from('billing_memberships').update({ canceled_at: new Date().toISOString() })
-          .eq('mode', this.mode).eq('provider_id', event.resource_id).is('canceled_at', null))
+          .eq('mode', this.mode).eq('gateway', this.provider).eq('provider_id', event.resource_id).is('canceled_at', null))
       }
     } else if (event.event_type.startsWith('INVOICE_')) {
       await this.syncInvoice(event.resource_id)
     }
     checked(await this.db.from('billing_webhook_events').update({ processed_at: new Date().toISOString() })
-      .eq('mode', this.mode).eq('event_id', event.event_id))
+      .eq('mode', this.mode).eq('gateway', this.provider).eq('event_id', event.event_id))
   }
 
   async retryEvent(event: EventRow) {
@@ -485,7 +510,7 @@ export class Billing {
       console.error('Falha ao conciliar evento', event.event_id, error instanceof Error ? error.message : '')
       checked(await this.db.from('billing_webhook_events')
         .update({ next_attempt_at: new Date(Date.now() + 5 * 60_000).toISOString() })
-        .eq('mode', this.mode).eq('event_id', event.event_id).is('processed_at', null))
+        .eq('mode', this.mode).eq('gateway', this.provider).eq('event_id', event.event_id).is('processed_at', null))
     }
   }
 
@@ -497,7 +522,7 @@ export class Billing {
     const url = status === 'authorized' && invoice.pdfUrl?.startsWith('https://') ? invoice.pdfUrl : null
     checked(await this.db.from('billing_payments').update({
       fiscal_status: status, fiscal_url: url, fiscal_provider_id: invoice.id,
-    }).eq('mode', this.mode).eq('provider_id', invoice.payment).not('membership_id', 'is', null))
+    }).eq('mode', this.mode).eq('gateway', this.provider).eq('provider_id', invoice.payment).not('membership_id', 'is', null))
   }
 
   async issueServiceInvoice(payment: Payment, invoiceSettings: Record<string, unknown>) {
@@ -533,11 +558,11 @@ export class Billing {
 
   async maintenance() {
     const events = checked(await this.db.from('billing_webhook_events').select('*')
-      .eq('mode', this.mode).is('processed_at', null).lte('next_attempt_at', new Date().toISOString())
+      .eq('mode', this.mode).eq('gateway', this.provider).is('processed_at', null).lte('next_attempt_at', new Date().toISOString())
       .order('received_at').limit(12).returns<EventRow[]>()) ?? []
     await Promise.all(events.map((event) => this.retryEvent(event)))
 
-    const payments = checked(await this.db.from('billing_payments').select('*').eq('mode', this.mode)
+    const payments = checked(await this.db.from('billing_payments').select('*').eq('mode', this.mode).eq('gateway', this.provider)
       .or('status.in.(pending,overdue,refund_pending,review),and(status.eq.paid,refund_requested_at.not.is.null)')
       .order('checked_at', { nullsFirst: true }).limit(12).returns<Payment[]>()) ?? []
     await Promise.allSettled(payments.map(async (payment) => {
@@ -554,7 +579,7 @@ export class Billing {
     if (settings) {
       const invoiceSettings = JSON.parse(settings) as Record<string, unknown>
       const invoices = checked(await this.db.from('billing_payments').select('*')
-        .eq('mode', this.mode).eq('status', 'paid').not('membership_id', 'is', null)
+        .eq('mode', this.mode).eq('gateway', this.provider).eq('status', 'paid').not('membership_id', 'is', null)
         .in('fiscal_status', ['required', 'processing']).order('checked_at', { nullsFirst: true })
         .limit(8).returns<Payment[]>()) ?? []
       await Promise.allSettled(invoices.map(async (payment) => {
@@ -565,23 +590,7 @@ export class Billing {
     }
   }
 
-  async adminPayments() {
-    const rows = checked(await this.db.from('billing_payments').select('*')
-      .eq('mode', this.mode).order('created_at', { ascending: false }).limit(100).returns<Payment[]>())
-    return (rows ?? []).map(paymentView)
-  }
-
-  async registerNfe(id: string, value: unknown) {
-    const key = typeof value === 'string' ? value.replace(/\s/g, '') : ''
-    if (!/^\d{44}$/.test(key)) throw new RequestError(400, 'Informe os 44 dígitos da chave da NF-e.')
-    const row = checked(await this.db.from('billing_payments')
-      .update({ fiscal_provider_id: key, fiscal_status: 'authorized' })
-      .eq('id', id).eq('mode', this.mode).eq('status', 'paid').not('order_id', 'is', null)
-      .is('refund_requested_at', null).select('id').maybeSingle())
-    if (!row) throw new RequestError(409, 'A nota deve estar vinculada a um pedido Pix pago.')
-  }
-
-  async customerPix(user: User, id: string) {
+  async customerPix(user: User, id: string, _document?: unknown) {
     const payment = await this.findPayment(id)
     if (!payment) throw new RequestError(404, 'Cobrança não encontrada.')
     if (payment.membership_id) {

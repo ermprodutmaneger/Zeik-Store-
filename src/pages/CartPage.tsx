@@ -112,7 +112,7 @@ export function CartPage() {
       const orderItems = items.map((item) => ({ product_id: item.productId, quantity: item.quantity }))
       let orderId: string
       if (pixCheckout) {
-        const storageKey = `zeik-pix:${config?.mode}:${user.id}:${signature}`
+        const storageKey = `zeik-pix:${config?.provider}:${config?.mode}:${user.id}:${signature}`
         const key = sessionStorage.getItem(storageKey) || idempotencyKeyRef.current
         sessionStorage.setItem(storageKey, key)
         const order = await startPixOrder(orderItems, key)
@@ -256,7 +256,7 @@ export function CartPage() {
           {pixCheckout ? (
             <div className="test-order-note">
               <p><strong>Retirada.</strong> {config?.pickup}</p>
-              {config?.mode === 'sandbox' ? <p>Pix de teste do Asaas.</p> : null}
+              {config?.mode === 'sandbox' ? <p>Pix em ambiente de teste.</p> : null}
             </div>
           ) : config?.legacyCheckout && !config.mode ? (
             <div className="test-order-note">
