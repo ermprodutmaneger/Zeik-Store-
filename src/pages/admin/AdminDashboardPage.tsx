@@ -71,7 +71,7 @@ export function AdminDashboardPage() {
     {
       icon: <ShoppingBag size={20} aria-hidden />,
       value: String(orderStats.totalOrders),
-      label: 'Pedidos de teste recebidos',
+      label: 'Pedidos recebidos',
     },
     {
       icon: <Timer size={20} aria-hidden />,
@@ -81,7 +81,7 @@ export function AdminDashboardPage() {
     {
       icon: <CircleDollarSign size={20} aria-hidden />,
       value: formatBRL(orderStats.totalCents),
-      label: 'Total em pedidos de teste (sem cobrança)',
+      label: 'Total em pedidos ativos',
     },
   ]
 
@@ -147,7 +147,7 @@ export function AdminDashboardPage() {
         </div>
         {recentOrders.length === 0 ? (
           <p className="muted small">
-            Nenhum pedido de teste ainda. Finalize um carrinho como cliente para ver
+            Nenhum pedido ainda. Finalize um carrinho como cliente para ver
             o fluxo completo.
           </p>
         ) : (

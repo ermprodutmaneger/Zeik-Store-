@@ -1,7 +1,10 @@
+import { useBillingConfig } from '../contexts/billingConfigContext'
 import { Link } from 'react-router-dom'
 import { FlaskConical } from 'lucide-react'
 
 export function Footer() {
+  const { config } = useBillingConfig()
+  const live = config?.legacyCheckout === false
   return (
     <footer className="site-footer">
       <div className="container">
@@ -11,15 +14,14 @@ export function Footer() {
               <span className="logo-zeik">Zeik</span> Store
             </p>
             <p style={{ marginTop: 10, maxWidth: 360, fontSize: '0.93rem' }}>
-              Loja criada para testar Supabase na prática: contas, banco de dados,
-              imagens e permissões de verdade — sem cobrança real.
+              {live ? 'Tecnologia e acessórios.' : 'Catálogo demonstrativo com pedidos de teste.'}
             </p>
-            <p style={{ marginTop: 14 }}>
+            {live ? null : <p style={{ marginTop: 14 }}>
               <span className="badge badge-warning">
                 <FlaskConical size={13} aria-hidden />
                 Ambiente de testes
               </span>
-            </p>
+            </p>}
           </div>
 
           <div>
@@ -54,8 +56,7 @@ export function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} Zeik Store — projeto de estudo.</span>
-          <span>Produtos fictícios e pedidos de teste: nenhum valor é cobrado.</span>
+          <span>© {new Date().getFullYear()} Zeik Store</span>
         </div>
       </div>
     </footer>

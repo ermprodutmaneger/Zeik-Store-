@@ -4,6 +4,7 @@ import { CheckCircle2, PackageSearch } from 'lucide-react'
 import { Alert } from '../components/Alert'
 import { EmptyState } from '../components/EmptyState'
 import { LoadingScreen } from '../components/LoadingScreen'
+import { OrderPixPanel } from '../components/OrderPixPanel'
 import { OrderStatusBadge } from '../components/OrderStatusBadge'
 import { formatBRL, formatDateTime, shortId } from '../lib/format'
 import { getOrderById } from '../services/orders'
@@ -56,13 +57,11 @@ export function OrderSuccessPage() {
   return (
     <div className="container page">
       <div className="success-wrap animate-in">
-        <div className="success-icon">
-          <CheckCircle2 size={44} aria-hidden />
-        </div>
-        <h1 className="page-title">Pedido de teste registrado!</h1>
+        {!order.billing_mode ? <div className="success-icon"><CheckCircle2 size={44} aria-hidden /></div> : null}
+        <h1 className="page-title">{order.billing_mode ? 'Pedido Pix' : 'Pedido de teste registrado!'}</h1>
         <p className="page-subtitle">
           Pedido <strong>#{shortId(order.id)}</strong> · {formatDateTime(order.created_at)}{' '}
-          · <OrderStatusBadge status={order.status} />
+          {order.billing_mode ? null : <>· <OrderStatusBadge status={order.status} /></>}
         </p>
 
         <div className="card" style={{ marginTop: 26, textAlign: 'left' }}>
@@ -78,19 +77,21 @@ export function OrderSuccessPage() {
             ))}
           </div>
           <div className="summary-row total">
-            <span>Total (sem cobrança)</span>
+            <span>{order.billing_mode ? 'Total do pedido' : 'Total (sem cobrança)'}</span>
             <span>{formatBRL(order.total_cents)}</span>
           </div>
         </div>
 
-        <div className="test-order-note" style={{ textAlign: 'left' }}>
-          <CheckCircle2 size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-          <p>
-            O estoque foi baixado no banco e o pedido ficou salvo no seu histórico.
-            Recarregue a página ou abra em outro aparelho: ele continua lá. O
-            administrador pode atualizar o andamento no painel.
-          </p>
-        </div>
+        {order.billing_mode ? (
+          <div style={{ marginTop: 16 }}>
+            <OrderPixPanel key={order.id} orderId={order.id} pickup={order.pickup_instructions} />
+          </div>
+        ) : (
+          <div className="test-order-note" style={{ textAlign: 'left' }}>
+            <CheckCircle2 size={18} aria-hidden />
+            <p>O estoque foi atualizado e o pedido ficou salvo em Minha conta.</p>
+          </div>
+        )}
 
         <div
           style={{

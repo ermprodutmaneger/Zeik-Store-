@@ -1,3 +1,4 @@
+import { useBillingConfig } from '../contexts/billingConfigContext'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -27,6 +28,8 @@ interface ProductResult {
 }
 
 export function ProductPage() {
+  const { config } = useBillingConfig()
+  const live = config?.legacyCheckout === false
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const { addItem } = useCart()
@@ -70,9 +73,9 @@ export function ProductPage() {
     : null
 
   useEffect(() => {
-    document.title = product ? `${product.name} · Zeik Store` : 'Zeik Store — Loja de testes'
+    document.title = product ? `${product.name} · Zeik Store` : 'Zeik Store'
     return () => {
-      document.title = 'Zeik Store — Loja de testes'
+      document.title = 'Zeik Store'
     }
   }, [product])
 
@@ -169,7 +172,7 @@ export function ProductPage() {
           )}
 
           <p className="big-price">{formatBRL(product.price_cents)}</p>
-          <p className="small muted">Preço de demonstração — os pedidos são de teste.</p>
+          {live ? null : <p className="small muted">Preço de demonstração.</p>}
 
           {product.description ? <p className="product-desc">{product.description}</p> : null}
 
@@ -209,8 +212,7 @@ export function ProductPage() {
           ) : (
             <p className="buy-note">
               <FlaskConical size={16} aria-hidden />
-              Ao finalizar, o pedido de teste é salvo no banco e baixa o estoque —
-              sem nenhuma cobrança.
+              {live ? 'Confira o Pix e as condições de retirada no carrinho.' : 'Você pode testar o checkout sem cobrança real.'}
             </p>
           )}
         </div>

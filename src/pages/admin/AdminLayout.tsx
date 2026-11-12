@@ -1,13 +1,12 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { LayoutDashboard, Package, PlusCircle, ShoppingBag, Store } from 'lucide-react'
+import { CreditCard, LayoutDashboard, Package, PlusCircle, ShoppingBag, Store } from 'lucide-react'
 
 export function AdminLayout() {
   return (
     <div className="container page">
       <h1 className="page-title">Painel do administrador</h1>
       <p className="page-subtitle" style={{ marginBottom: 22 }}>
-        Produtos, fotos, estoque e pedidos de teste — tudo salvo no Supabase e
-        protegido por RLS.
+        Gerencie produtos, estoque, pedidos e cobranças.
       </p>
 
       <div className="admin-shell">
@@ -26,7 +25,11 @@ export function AdminLayout() {
           </NavLink>
           <NavLink to="/admin/pedidos">
             <ShoppingBag size={18} aria-hidden />
-            Pedidos de teste
+            Pedidos
+          </NavLink>
+          <NavLink to="/admin/cobrancas">
+            <CreditCard size={18} aria-hidden />
+            Cobranças Pix
           </NavLink>
           <hr className="nav-divider" />
           <Link to="/">

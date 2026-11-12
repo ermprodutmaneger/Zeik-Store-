@@ -21,6 +21,7 @@ import type { OrderWithItems } from '../types/database'
 
 export function AccountPage() {
   const { user, profile, isAdmin, signOut, refreshProfile } = useAuth()
+  const userId = user?.id
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -55,8 +56,9 @@ export function AccountPage() {
   }
 
   useEffect(() => {
+    if (!userId) return
     let active = true
-    listMyOrders()
+    listMyOrders(userId)
       .then((data) => {
         if (active) setOrders(data)
       })
@@ -69,7 +71,7 @@ export function AccountPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [userId])
 
   async function handleSaveName(event: FormEvent) {
     event.preventDefault()
@@ -103,7 +105,7 @@ export function AccountPage() {
     <div className="container page">
       <h1 className="page-title">Olá, {displayName.split(' ')[0]}!</h1>
       <p className="page-subtitle" style={{ marginBottom: 22 }}>
-        Gerencie seus dados e acompanhe seus pedidos de teste.
+        Gerencie seus dados e acompanhe seus pedidos.
       </p>
 
       {notice ? <Alert variant="success">{notice}</Alert> : null}
@@ -195,6 +197,7 @@ export function AccountPage() {
             </section>
           ) : null}
 
+          <Link className="btn btn-outline" to="/mensalidades">Minhas mensalidades</Link>
           <button type="button" className="btn btn-outline" onClick={handleSignOut}>
             <LogOut size={17} aria-hidden />
             Sair da conta
@@ -213,7 +216,7 @@ export function AccountPage() {
             }}
           >
             <ClipboardList size={21} aria-hidden />
-            Meus pedidos de teste
+            Meus pedidos
           </h2>
 
           {ordersLoading ? (
@@ -224,7 +227,7 @@ export function AccountPage() {
             <EmptyState
               icon={<ClipboardList size={30} />}
               title="Nenhum pedido ainda"
-              description="Quando você finalizar um carrinho, o pedido de teste aparece aqui — salvo no banco, com baixa de estoque."
+              description="Seus pedidos aparecem aqui depois de finalizar o carrinho."
               action={
                 <Link to="/" className="btn btn-primary">
                   Ver produtos
@@ -240,10 +243,9 @@ export function AccountPage() {
                 </div>
                 <div className="order-meta">
                   <span>{formatDateTime(order.created_at)}</span>
-                  <span className="badge badge-warning">
-                    <FlaskConical size={12} aria-hidden />
-                    Pedido de teste — sem cobrança
-                  </span>
+                  {order.is_test_order ? <span className="badge badge-warning">
+                    <FlaskConical size={12} aria-hidden /> Teste
+                  </span> : null}
                   <span>
                     Total: <strong>{formatBRL(order.total_cents)}</strong>
                   </span>
@@ -259,6 +261,9 @@ export function AccountPage() {
                     </div>
                   ))}
                 </div>
+                <Link className="btn btn-outline btn-sm" style={{ marginTop: 12 }} to={`/pedido-concluido/${order.id}`}>
+                  {order.billing_mode ? 'Ver pedido e Pix' : 'Ver pedido'}
+                </Link>
               </article>
             ))
           )}

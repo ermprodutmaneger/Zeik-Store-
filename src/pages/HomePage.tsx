@@ -1,3 +1,4 @@
+import { useBillingConfig } from '../contexts/billingConfigContext'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
@@ -52,6 +53,8 @@ interface CatalogResult {
 }
 
 export function HomePage() {
+  const { config } = useBillingConfig()
+  const live = config?.legacyCheckout === false
   const [searchParams, setSearchParams] = useSearchParams()
   const searchParam = searchParams.get('busca') ?? ''
   const categoryParam = searchParams.get('categoria') ?? ''
@@ -152,15 +155,14 @@ export function HomePage() {
             <div className="hero-copy">
               <span className="hero-badge">
                 <Sparkles size={14} aria-hidden />
-                Loja de testes com Supabase
+                {live ? 'Zeik Store' : 'Loja de testes'}
               </span>
               <h1 className="hero-title">
                 Tecnologia que combina com <span className="grad-text">você</span>
               </h1>
               <p className="hero-subtitle">
-                Fones, relógios, caixas de som e acessórios fictícios para você
-                testar cadastro, carrinho e pedidos de ponta a ponta — sem
-                gastar nada.
+                {live ? 'Fones, relógios, caixas de som e acessórios. Consulte o estoque e as condições de retirada.'
+                  : 'Explore o catálogo demonstrativo e teste o carrinho sem cobrança real.'}
               </p>
               <div className="hero-ctas">
                 <a href="#catalogo" className="btn btn-primary btn-lg">
@@ -179,14 +181,15 @@ export function HomePage() {
             </div>
           </section>
 
-          <section className="benefits" aria-label="Vantagens da loja de testes">
+          <section className="benefits" aria-label="Como comprar">
             <div className="benefit">
               <div className="benefit-icon">
                 <BadgePercent size={22} aria-hidden />
               </div>
               <div>
-                <h3>Pedido de teste grátis</h3>
-                <p>Finalize o carrinho sem cobrança: nenhum pagamento real acontece nesta fase.</p>
+                <h3>{live ? 'Pagamento via Pix' : 'Pedidos de teste'}</h3>
+                <p>{live ? 'Gere o QR Code no pedido e acompanhe a confirmação pela loja.'
+                  : 'Explore o checkout sem transferir dinheiro.'}</p>
               </div>
             </div>
             <div className="benefit">
@@ -194,8 +197,8 @@ export function HomePage() {
                 <ClipboardCheck size={22} aria-hidden />
               </div>
               <div>
-                <h3>Estoque de verdade</h3>
-                <p>Cada pedido baixa o estoque no banco e fica salvo no seu histórico.</p>
+                <h3>Acompanhe seu pedido</h3>
+                <p>Veja os itens, o total e o andamento em Minha conta.</p>
               </div>
             </div>
             <div className="benefit">
