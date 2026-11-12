@@ -1,5 +1,7 @@
 # Zeik Store
 
+O checkout Pix e as mensalidades podem ser ativados no Asaas. Veja o [guia de configuração e homologação](docs/PAGAMENTOS.md).
+
 Loja de testes completa para aprender **Supabase na prática**: autenticação real, banco PostgreSQL com Row Level Security (RLS), upload de fotos no Storage e painel de administrador — com pedidos de teste **sem cobrança**.
 
 **Estado atual:** código verificado com lint e build; banco e Storage configurados no projeto exclusivo `zeik-store`, na região de São Paulo. O projeto Vercel `zeik-store` está vinculado a este repositório com as variáveis públicas configuradas. A loja está publicada em [zeik-store.vercel.app](https://zeik-store.vercel.app/), com o endereço de produção e os retornos de confirmação e recuperação já configurados no Supabase. O primeiro teste por e-mail e a identificação da conta administrativa seguem o roteiro de [docs/HOSPEDAGEM.md](docs/HOSPEDAGEM.md).

@@ -5,9 +5,11 @@ import { Alert } from '../components/Alert'
 import { EmptyState } from '../components/EmptyState'
 import { ProductImage } from '../components/ProductImage'
 import { QuantityStepper } from '../components/QuantityStepper'
+import { useBillingConfig } from '../contexts/billingConfigContext'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { formatBRL } from '../lib/format'
+import { startPixOrder } from '../services/billing'
 import { revalidateCartItems } from '../services/catalog'
 import { createTestOrder } from '../services/orders'
 import type { CartItem } from '../types/database'
@@ -16,6 +18,9 @@ export function CartPage() {
   const { items, setQuantity, removeItem, replaceItems, clear, subtotalCents, totalItems } =
     useCart()
   const { user } = useAuth()
+  const { config, error: configError } = useBillingConfig()
+  const pixCheckout = Boolean(config?.mode && config.pickup)
+  const canCheckout = pixCheckout || (config?.legacyCheckout === true && !config.mode)
   const navigate = useNavigate()
 
   const [notices, setNotices] = useState<string[]>([])
@@ -100,20 +105,29 @@ export function CartPage() {
       navigate('/entrar', { state: { from: '/carrinho' } })
       return
     }
+    if (!canCheckout) return
     setSubmitting(true)
     setCheckoutError(null)
     try {
-      const orderId = await createTestOrder(
-        items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
-        idempotencyKeyRef.current,
-      )
+      const orderItems = items.map((item) => ({ product_id: item.productId, quantity: item.quantity }))
+      let orderId: string
+      if (pixCheckout) {
+        const storageKey = `zeik-pix:${config?.mode}:${user.id}:${signature}`
+        const key = sessionStorage.getItem(storageKey) || idempotencyKeyRef.current
+        sessionStorage.setItem(storageKey, key)
+        const order = await startPixOrder(orderItems, key)
+        orderId = order.orderId
+        sessionStorage.removeItem(storageKey)
+      } else {
+        orderId = await createTestOrder(orderItems, idempotencyKeyRef.current)
+      }
       clear()
       navigate(`/pedido-concluido/${orderId}`)
     } catch (err) {
       setCheckoutError(
         err instanceof Error
           ? err.message
-          : 'Não foi possível finalizar o pedido de teste. Tente novamente.',
+          : 'Não foi possível registrar o pedido. Tente novamente.',
       )
     } finally {
       setSubmitting(false)
@@ -129,7 +143,7 @@ export function CartPage() {
         <EmptyState
           icon={<ShoppingCart size={30} />}
           title="Carrinho vazio"
-          description="Adicione produtos da vitrine para montar um pedido de teste."
+          description="Adicione produtos da vitrine para montar seu pedido."
           action={
             <Link to="/" className="btn btn-primary">
               Ver produtos
@@ -158,7 +172,7 @@ export function CartPage() {
         </Alert>
       ) : null}
 
-      {checkoutError ? <Alert variant="error">{checkoutError}</Alert> : null}
+      {checkoutError || configError ? <Alert variant="error">{checkoutError || configError}</Alert> : null}
 
       <div className="cart-layout">
         <div className="cart-items">
@@ -201,11 +215,11 @@ export function CartPage() {
             <span>{formatBRL(subtotalCents)}</span>
           </div>
           <div className="summary-row">
-            <span>Entrega</span>
-            <span>Simulada — grátis</span>
+            <span>{pixCheckout ? 'Entrega' : 'Entrega simulada'}</span>
+            <span>{pixCheckout ? 'Retirada' : 'Grátis'}</span>
           </div>
           <div className="summary-row total">
-            <span>Total do pedido de teste</span>
+            <span>{pixCheckout ? 'Total do pedido' : 'Total'}</span>
             <span>{formatBRL(subtotalCents)}</span>
           </div>
 
@@ -213,7 +227,7 @@ export function CartPage() {
             type="button"
             className="btn btn-primary btn-lg btn-block"
             onClick={handleCheckout}
-            disabled={submitting}
+            disabled={submitting || !canCheckout}
             style={{ marginTop: 16 }}
           >
             {submitting ? (
@@ -221,8 +235,12 @@ export function CartPage() {
                 <span className="spinner" aria-hidden />
                 Registrando pedido…
               </>
+            ) : !config ? (
+              'Consultando pagamento…'
+            ) : !canCheckout ? (
+              'Checkout indisponível'
             ) : user ? (
-              'Finalizar pedido de teste'
+              pixCheckout ? 'Continuar para o Pix' : 'Finalizar pedido de teste'
             ) : (
               'Entrar para finalizar'
             )}
@@ -235,14 +253,17 @@ export function CartPage() {
             </p>
           ) : null}
 
-          <div className="test-order-note">
-            <FlaskConical size={18} style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
-            <p>
-              <strong>Pedido de teste, sem cobrança.</strong> Nenhum pagamento é
-              feito: o pedido é salvo no banco, o estoque baixa e você acompanha
-              tudo em “Minha conta”.
-            </p>
-          </div>
+          {pixCheckout ? (
+            <div className="test-order-note">
+              <p><strong>Retirada.</strong> {config?.pickup}</p>
+              {config?.mode === 'sandbox' ? <p>Pix de teste do Asaas.</p> : null}
+            </div>
+          ) : config?.legacyCheckout && !config.mode ? (
+            <div className="test-order-note">
+              <FlaskConical size={18} aria-hidden />
+              <p><strong>Pedido de teste, sem cobrança.</strong> Acompanhe em Minha conta.</p>
+            </div>
+          ) : null}
 
           <Link
             to="/"

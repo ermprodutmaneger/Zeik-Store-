@@ -1,0 +1,5 @@
+project_id = "zeik-store"
+
+[functions.zeik-billing]
+# Loja: valida a sessão no Auth. Asaas/Cron: usam segredos exclusivos.
+verify_jwt = false

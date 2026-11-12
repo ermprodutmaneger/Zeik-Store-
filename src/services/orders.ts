@@ -35,11 +35,12 @@ export async function createTestOrder(
 const ORDER_WITH_ITEMS = '*, order_items(*)'
 
 /** Pedidos do cliente logado (RLS limita aos próprios pedidos). */
-export async function listMyOrders(): Promise<OrderWithItems[]> {
+export async function listMyOrders(userId: string): Promise<OrderWithItems[]> {
   const supabase = requireSupabase()
   const { data, error } = await supabase
     .from('orders')
     .select(ORDER_WITH_ITEMS)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .returns<OrderWithItems[]>()
   throwIfError(error)
@@ -83,7 +84,7 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
 export interface OrderStats {
   totalOrders: number
   pendingOrders: number
-  /** Soma dos pedidos de teste não cancelados, em centavos. */
+  /** Soma dos pedidos não cancelados, em centavos. */
   totalCents: number
 }
 

@@ -472,3 +472,19 @@ a.product-name:hover {
   justify-content: center;
   animation: fade-up 0.5s ease both;
 }
+
+/* Pagamento Pix e mensalidades */
+.billing-stack { display: grid; gap: 16px; margin-top: 18px; }
+.billing-panel { display: grid; gap: 12px; text-align: left; min-width: 0; }
+.billing-panel h2, .billing-panel h3 { font-size: 1.12rem; }
+.billing-panel .badge, .billing-panel > .btn, .billing-panel > a { justify-self: start; }
+.billing-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.billing-form { display: grid; gap: 12px; }
+.billing-form .btn { justify-self: start; }
+.billing-charge { padding-top: 12px; border-top: 1px solid var(--border); }
+.billing-charge .pix-card { margin-top: 12px; }
+.pix-card { display: grid; gap: 10px; min-width: 0; }
+.pix-card img { display: block; background: #fff; padding: 8px; border-radius: 12px; }
+.pix-copy { display: flex; align-items: stretch; gap: 8px; }
+.pix-copy .input { min-width: 0; text-overflow: ellipsis; }
+.member-content { white-space: pre-wrap; overflow-wrap: anywhere; }

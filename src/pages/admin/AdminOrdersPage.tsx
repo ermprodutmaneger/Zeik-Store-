@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { FlaskConical, Search, ShoppingBag } from 'lucide-react'
 import { Alert } from '../../components/Alert'
 import { EmptyState } from '../../components/EmptyState'
@@ -123,7 +124,7 @@ export function AdminOrdersPage() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={<ShoppingBag size={30} />}
-          title={orders.length === 0 ? 'Nenhum pedido de teste ainda' : 'Nenhum pedido encontrado'}
+          title={orders.length === 0 ? 'Nenhum pedido ainda' : 'Nenhum pedido encontrado'}
           description={
             orders.length === 0
               ? 'Quando um cliente finalizar o carrinho, o pedido aparece aqui com os itens e o total calculados pelo banco.'
@@ -143,10 +144,9 @@ export function AdminOrdersPage() {
                 {order.profiles?.email ? ` · ${order.profiles.email}` : ''}
               </span>
               <span>{formatDateTime(order.created_at)}</span>
-              <span className="badge badge-warning">
-                <FlaskConical size={12} aria-hidden />
-                Teste — sem cobrança
-              </span>
+              {order.is_test_order ? <span className="badge badge-warning">
+                <FlaskConical size={12} aria-hidden /> Teste
+              </span> : null}
               <span>
                 Total: <strong>{formatBRL(order.total_cents)}</strong>
               </span>
@@ -184,17 +184,20 @@ export function AdminOrdersPage() {
                 className="select"
                 style={{ width: 'auto', minWidth: 200 }}
                 value={order.status}
-                disabled={updatingId === order.id || order.status === 'cancelado' || order.status === 'entregue'}
+                disabled={updatingId === order.id || order.status === 'cancelado' || order.status === 'entregue' ||
+                  (Boolean(order.billing_mode) && order.status === 'pendente')}
                 onChange={(e) =>
                   void handleStatusChange(order, e.target.value as OrderStatus)
                 }
               >
-                {ORDER_STATUSES.map((status) => (
+                {ORDER_STATUSES.filter((status) => !order.billing_mode ||
+                  status === order.status || ['em_preparo', 'entregue'].includes(status)).map((status) => (
                   <option key={status} value={status}>
                     {ORDER_STATUS_LABELS[status]}
                   </option>
                 ))}
               </select>
+              {order.billing_mode ? <Link to="/admin/cobrancas" className="btn btn-outline btn-sm">Ver cobranças</Link> : null}
               {updatingId === order.id ? (
                 <span className="small muted">Salvando…</span>
               ) : null}

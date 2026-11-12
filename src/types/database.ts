@@ -77,8 +77,9 @@ export interface Order {
   user_id: string
   status: OrderStatus
   total_cents: number
-  /** Nesta fase todos os pedidos são de teste, sem cobrança. */
   is_test_order: boolean
+  billing_mode: 'sandbox' | 'production' | null
+  pickup_instructions: string | null
   idempotency_key: string | null
   created_at: string
   updated_at: string
